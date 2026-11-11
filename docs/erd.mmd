@@ -1,0 +1,195 @@
+erDiagram
+    direction LR
+    users ||..o{ sessions : "user_id"
+    users ||..o{ packages : "updated_by"
+    packages ||..o{ package_backgrounds : "package_id"
+    packages ||..o{ package_addons : "package_id"
+    addons ||..o{ package_addons : "addon_id"
+    packages |o..o{ visits : "package_id"
+    package_backgrounds |o..o{ visits : "background_id"
+    users ||..o{ visits : "created_by"
+    packages ||..o{ queue_counters : "package_id"
+    visits ||..|{ visit_events : "visit_id"
+    users ||..o{ visit_events : "created_by"
+    visits ||..|| transactions : "visit_id"
+    users ||..o{ transactions : "created_by"
+    transactions ||..o{ transaction_items : "transaction_id"
+    addons |o..o{ transaction_items : "addon_id"
+    users ||..o{ transaction_items : "created_by"
+    transactions ||..o{ payments : "transaction_id"
+    users ||..o{ payments : "created_by"
+    transactions ||..o{ refunds : "transaction_id"
+    users ||..o{ refunds : "created_by"
+    users ||..o{ audit_logs : "user_id"
+    sessions |o..o{ audit_logs : "session_id"
+    users {
+        int id PK
+        string name
+        string username UK
+        string password_hash
+        enum role UK
+        boolean must_change_password
+        datetime created_at
+        datetime updated_at
+    }
+    sessions {
+        string id PK
+        int user_id FK
+        datetime last_activity_at
+        datetime revoked_at "opsional"
+        datetime created_at
+    }
+    packages {
+        int id PK
+        string name UK
+        string queue_code UK
+        enum price_type
+        bigint price
+        int included_persons "opsional"
+        bigint extra_person_price "opsional"
+        int min_persons "opsional"
+        int max_persons "opsional"
+        text description "opsional"
+        boolean is_open
+        string closed_reason "opsional"
+        boolean is_active
+        int updated_by FK
+        datetime updated_at
+    }
+    package_backgrounds {
+        int id PK
+        int package_id FK
+        string name
+        int max_persons "opsional"
+        boolean is_active
+    }
+    addons {
+        int id PK
+        string name
+        bigint price
+        string unit
+        boolean is_active
+    }
+    package_addons {
+        int package_id PK, FK
+        int addon_id PK, FK
+    }
+    visits {
+        bigint id PK
+        string customer_name
+        enum customer_type
+        datetime appointment_at "opsional"
+        date service_date
+        int package_id FK "opsional"
+        int background_id FK "opsional"
+        int persons "opsional"
+        int queue_number "opsional"
+        datetime queue_entered_at "opsional"
+        string queue_code_snapshot "opsional sebelum masuk antrean"
+        boolean has_priority
+        enum status
+        datetime called_at "opsional"
+        datetime started_at "opsional"
+        datetime finished_at "opsional"
+        string cancel_reason "opsional"
+        string note "opsional"
+        string client_request_id UK
+        string request_hash
+        int created_by FK
+        datetime created_at
+        datetime updated_at
+        int version
+    }
+    queue_counters {
+        int package_id PK, FK
+        date service_date PK
+        int last_number
+    }
+    visit_events {
+        bigint id PK
+        bigint visit_id FK
+        string event_type
+        string from_status "opsional"
+        string to_status
+        int package_id "opsional"
+        int queue_number "opsional"
+        date service_date_snapshot
+        string queue_code_snapshot "opsional"
+        string reason "opsional"
+        int created_by FK
+        datetime created_at
+    }
+    transactions {
+        bigint id PK
+        string transaction_no UK
+        bigint visit_id FK, UK
+        enum price_type_snapshot "opsional sebelum paket dipilih"
+        bigint price_snapshot "opsional sebelum paket dipilih"
+        int included_persons_snapshot "opsional"
+        bigint extra_person_price_snapshot "opsional"
+        string background_snapshot "opsional"
+        bigint subtotal
+        bigint total
+        enum payment_status
+        enum refund_status
+        datetime completed_at "opsional"
+        datetime cancelled_at "opsional"
+        int created_by FK
+        datetime created_at
+        datetime updated_at
+        int version
+    }
+    transaction_items {
+        bigint id PK
+        bigint transaction_id FK
+        enum item_type
+        int addon_id FK "opsional"
+        string description
+        int qty
+        string unit_snapshot
+        bigint unit_price
+        bigint amount
+        boolean is_active
+        string reason "opsional"
+        int created_by FK
+        datetime created_at
+    }
+    payments {
+        bigint id PK
+        bigint transaction_id FK
+        enum payment_type
+        enum method "TUNAI TRANSFER QRIS"
+        bigint amount
+        bigint cash_received "opsional"
+        bigint change_amount "opsional"
+        datetime paid_at
+        string reference UK "opsional"
+        string client_request_id UK
+        string request_hash
+        int created_by FK
+        datetime created_at
+    }
+    refunds {
+        bigint id PK
+        bigint transaction_id FK
+        bigint amount
+        enum method "TUNAI TRANSFER QRIS"
+        string reason
+        datetime refunded_at
+        string client_request_id UK
+        string request_hash
+        int created_by FK
+        datetime created_at
+    }
+    audit_logs {
+        bigint id PK
+        string entity
+        string entity_id
+        string action
+        json old_values "opsional"
+        json new_values "opsional"
+        string reason "opsional"
+        int user_id FK
+        string session_id FK "opsional untuk tindakan sistem"
+        datetime created_at
+    }
