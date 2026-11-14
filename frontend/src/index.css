@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* Tema Dream Space, diambil dari desain Figma.
+   Font dimuat di main.jsx (paket @fontsource, tanpa Google Fonts). */
+@theme {
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  /* Judul bergaya "Dream Space". Fraunces = pengganti gratis yang mirip font desain. */
+  --font-display: "Fraunces Variable", Georgia, serif;
+
+  --color-brand-50: #f0f9ff;
+  --color-brand-100: #e0f2fe;
+  --color-brand-200: #bae6fd;
+  --color-brand-500: #00a4e4;
+  --color-brand-600: #0284c7;
+  --color-brand-700: #0369a1;
+  --color-brand-yellow: #fef300;
+}
+
+/* Serif lembut untuk judul display: class="font-display font-black font-soft" */
+@utility font-soft {
+  font-variation-settings: "SOFT" 100, "WONK" 0, "opsz" 9;
+}
+
 body {
   @apply bg-slate-50 text-slate-800 antialiased;
 }

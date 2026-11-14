@@ -7,14 +7,21 @@ Owner memantau penjualan dan penerimaan uang, melihat laporan per periode, dan m
 FR-11, FR-15 · UC-21, UC-22, UC-23.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Larisa**
 
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
 | `pages/DashboardPage.jsx` | Dashboard | Owner | TODO |
 | `pages/ReportsPage.jsx` | Laporan | Owner | TODO |
-| `components/` | dibuat sesuai kebutuhan, mis. `PeriodPicker` (dipakai kedua halaman), `StatCard`, `SalesChart` | | — |
+| `components/` | dibuat sesuai kebutuhan, mis. `SalesChart` (grafik Recharts) | | — |
+
+Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
+- `PageHeader` dengan `actions={<SegmentedControl …/>}`: judul + pilihan periode di kanan, seperti desain;
+- `StatCard`: 4 kartu angka di atas (`tone="green"` untuk Sesi Selesai);
+- `Card`: kotak grafik dan tabel;
+- `Table`: tabel laporan;
+- `Button variant="danger"` / `variant="soft-success"`: tombol Unduh PDF / Unduh Excel.
 
 ## Hak akses
 Owner saja. Admin tidak punya Dashboard maupun Laporan; laporan shift Admin sudah dihapus dari desain.

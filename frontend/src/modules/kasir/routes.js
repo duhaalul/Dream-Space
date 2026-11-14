@@ -1,4 +1,5 @@
 import { lazy } from 'react'
+import { CreditCard, History } from 'lucide-react'
 import { ROLES } from '@/shared/utils/constants'
 
 const CashierPage = lazy(() => import('./pages/CashierPage'))
@@ -10,12 +11,12 @@ export const kasirRoutes = [
     path: '/kasir/:id?',
     component: CashierPage,
     roles: [ROLES.ADMIN],
-    menu: { label: 'Kasir', order: 30, to: '/kasir' },
+    menu: { label: 'Kasir', order: 30, to: '/kasir', icon: CreditCard },
   },
   {
     path: '/riwayat',
     component: HistoryPage,
     roles: [ROLES.ADMIN, ROLES.OWNER],
-    menu: { label: 'Riwayat', order: 40 },
+    menu: { label: 'Riwayat', order: 40, icon: History },
   },
 ]

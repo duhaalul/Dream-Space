@@ -7,7 +7,7 @@ Mencatat reservasi WhatsApp dan pelanggan datang langsung, menampilkan antrean p
 FR-03, FR-04, FR-05, FR-08 · UC-07 s.d. UC-12, UC-16.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Ihsan**
 
 ## Halaman & komponen
 Satu halaman `/antrean` dengan 3 tab (tab aktif disimpan di URL `?tab=`).

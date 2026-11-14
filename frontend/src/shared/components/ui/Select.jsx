@@ -1,4 +1,6 @@
 import { useId } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { FIELD_CLASS } from './fieldClass'
 
 // options: [{ value, label }]
 export default function Select({ label, error, options = [], placeholder, className = '', id, ...props }) {
@@ -8,26 +10,30 @@ export default function Select({ label, error, options = [], placeholder, classN
   return (
     <div className={className}>
       {label && (
-        <label htmlFor={selectId} className="mb-1 block text-sm font-medium text-slate-700">
+        <label htmlFor={selectId} className="mb-1.5 block text-sm text-slate-500">
           {label}
         </label>
       )}
-      <select
-        id={selectId}
-        aria-invalid={error ? true : undefined}
-        className={`w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${
-          error ? 'border-red-400' : 'border-slate-300'
-        }`}
-        {...props}
-      >
-        {placeholder && <option value="">{placeholder}</option>}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      <div className="relative">
+        <select
+          id={selectId}
+          aria-invalid={error ? true : undefined}
+          className={`${FIELD_CLASS} appearance-none pr-10 ${error ? 'border-red-300' : 'border-slate-200'}`}
+          {...props}
+        >
+          {placeholder && <option value="">{placeholder}</option>}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-slate-400"
+        />
+      </div>
+      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
     </div>
   )
 }

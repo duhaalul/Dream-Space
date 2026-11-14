@@ -7,12 +7,14 @@ Login, logout, dan kata sandi untuk dua akun tetap: Admin dan Owner.
 FR-01, FR-13 · UC-01, UC-02, UC-24.
 
 ## Penanggung jawab
-_(diisi PM)_
+- **Ihsan:** Login, `AuthContext.jsx`/`useAuth.js`, form kata sandi (sudah selesai).
+- **Larisa:** tampilan halaman Profil (`pages/ProfilePage.jsx`) sesuai Figma, memakai form kata sandi yang sudah ada.
 
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
-| `pages/LoginPage.jsx` | Selamat Datang Kembali + panel logo | publik | Berfungsi, tampilan belum sesuai Figma |
+| `pages/LoginPage.jsx` | Selamat Datang Kembali | publik | Selesai, sesuai Figma |
+| `components/LoginBrandPanel.jsx` | Panel biru logo Dream Space (kanan Login, layar lebar saja) | publik | Selesai |
 | `pages/ProfilePage.jsx` | Profil | Admin, Owner | Berfungsi, tampilan belum sesuai Figma |
 | `components/ChangePasswordForm.jsx` | Profil › ubah kata sandi | Admin, Owner | Selesai |
 | `components/ResetAdminPasswordForm.jsx` | Profil Owner › reset kata sandi Admin | Owner | Selesai |
@@ -63,7 +65,8 @@ Error lain cukup tampilkan `error.message` dengan `<Alert variant="error">`.
 
 ## Checklist selesai
 - [x] Login, logout, ganti kata sandi, reset kata sandi Admin
-- [ ] Tampilan Login sesuai Figma (tanpa Lupa Password dan Ingat Saya)
+- [x] Tampilan Login sesuai Figma (tanpa Lupa Password, Ingat Saya, dan tab Owner/Admin)
+- [ ] Ganti `src/assets/logo-ds.png` dengan ekspor logo resmi dari Figma (sekarang hasil potongan gambar desain)
 - [ ] Tampilan Profil Admin dan Owner sesuai Figma
 - [ ] Ubah nama tampilan dengan `updateProfile` (opsional)
 - [ ] Profil nyaman dibuka di HP (Owner)

@@ -7,7 +7,7 @@ Menerima pembayaran, menyelesaikan sesi, mencetak nota, mengembalikan kelebihan 
 FR-06, FR-07, FR-09, FR-10, FR-12, FR-14 · UC-13 s.d. UC-15, UC-17 s.d. UC-20.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Ihsan**
 
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
@@ -15,6 +15,13 @@ _(diisi PM)_
 | `pages/CashierPage.jsx` | Kasir: Pelanggan Aktif · Rincian Tagihan · Pembayaran | Admin | TODO |
 | `pages/HistoryPage.jsx` | Riwayat + Koreksi Data Transaksi | Admin; Owner lihat | TODO |
 | `components/` | dibuat sesuai kebutuhan, mis. `ActiveVisitList`, `BillDetails`, `PaymentForm`, `CorrectionPanel` | | — |
+
+Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
+- `Card`: tiga kolom Kasir;
+- `SegmentedControl tone="brand"`: pilihan metode Tunai/Transfer/QRIS;
+- `Button variant="primary"` (Terima Pembayaran) dan `variant="success"` (Selesaikan & Cetak Nota);
+- `StatCard` + `Table`: ringkasan dan daftar di Riwayat;
+- `Badge`: status bayar.
 
 Route: `/kasir` = daftar pelanggan aktif; `/kasir/:id` = pelanggan (kunjungan) terpilih.
 

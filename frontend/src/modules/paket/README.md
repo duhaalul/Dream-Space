@@ -7,7 +7,9 @@ Owner mengelola paket, harga, kapasitas, latar, dan tambahan layanan. Admin meli
 FR-02, FR-03 · UC-03, UC-04, UC-05, UC-06.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Larisa**
+
+> **Prioritas (15 Nov):** kerjakan `RoomAvailabilityToggle` dan form paket lebih dulu. Komponen itu dipakai di halaman Antrean, dan data paket dibutuhkan untuk menguji Antrean dan Kasir.
 
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |

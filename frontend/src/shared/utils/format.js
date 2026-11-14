@@ -1,12 +1,9 @@
-const rupiah = new Intl.NumberFormat('id-ID', {
-  style: 'currency',
-  currency: 'IDR',
-  maximumFractionDigits: 0,
-})
+const thousands = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 })
 
-// 150000 → "Rp 150.000"
+// 150000 → "Rp150.000", -50000 → "-Rp50.000" (format sesuai desain)
 export function formatRupiah(amount) {
-  return rupiah.format(Number(amount ?? 0))
+  const value = Number(amount ?? 0)
+  return `${value < 0 ? '-' : ''}Rp${thousands.format(Math.abs(value))}`
 }
 
 // Backend mengirim waktu WIB "YYYY-MM-DD HH:mm:ss" (kadang dengan ".000").
