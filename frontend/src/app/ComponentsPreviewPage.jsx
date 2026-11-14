@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Wallet } from 'lucide-react'
+import { useAuth } from '@/modules/akun/useAuth'
+import RoomAvailabilityToggle from '@/modules/paket/components/RoomAvailabilityToggle'
 import {
   Alert,
   Badge,
@@ -34,6 +36,8 @@ export default function ComponentsPreviewPage() {
   const [period, setPeriod] = useState('today')
   const [method, setMethod] = useState('TUNAI')
   const [modalOpen, setModalOpen] = useState(false)
+  const [roomOpen, setRoomOpen] = useState(true)
+  const { user } = useAuth()
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
@@ -119,6 +123,26 @@ export default function ComponentsPreviewPage() {
           ]}
           rows={SAMPLE_ROWS}
         />
+      </Card>
+
+      <Card
+        title="RoomAvailabilityToggle (modul paket, dipakai di Antrean)"
+        description="Admin saja. Memanggil backend sungguhan: PATCH /packages/1/availability."
+      >
+        {user ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge tone={roomOpen ? 'brand' : 'red'}>{roomOpen ? 'Ruangan buka' : 'Ruangan ditutup'}</Badge>
+            <RoomAvailabilityToggle
+              packageId={1}
+              packageName="Reguler (RG)"
+              isOpen={roomOpen}
+              onChanged={(result) => setRoomOpen(result.is_open)}
+            />
+            {user.role !== 'ADMIN' && <span className="text-sm text-slate-500">Login sebagai Admin untuk melihat tombol.</span>}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Login sebagai Admin dulu (tanpa reload), lalu buka halaman ini lagi.</p>
+        )}
       </Card>
 
       <Modal

@@ -36,15 +36,15 @@ npm run dev               # buka http://localhost:5173
 | Orang | Bagian | Folder | Dipakai oleh |
 |---|---|---|---|
 | **Ihsan** | Menu samping, komponen dasar, Login, sesi login | `app/`, `shared/`, `modules/akun/` (kecuali halaman Profil) | Admin & Owner |
-| **Ihsan** | Antrean | `modules/antrean/` | Admin (mencatat), Owner (lihat) |
+| **Ihsan** | Antrean + tombol Tutup/Buka Ruangan | `modules/antrean/`, `modules/paket/components/RoomAvailabilityToggle.jsx` | Admin (mencatat), Owner (lihat) |
 | **Ihsan** | Kasir & Riwayat | `modules/kasir/` | Kasir: Admin · Riwayat: Admin & Owner |
-| **Larisa** | Paket / Kelola Paket | `modules/paket/` | Admin (lihat, tutup/buka ruangan), Owner (kelola) |
+| **Larisa** | Paket / Kelola Paket | `modules/paket/` (kecuali `components/RoomAvailabilityToggle.jsx`) | Admin (lihat), Owner (kelola) |
 | **Larisa** | Dashboard & Laporan | `modules/laporan/` | Owner |
 | **Larisa** | Halaman Profil | `modules/akun/pages/ProfilePage.jsx` | Admin & Owner |
 
 ### 1. Batas file
 - Kerjakan hanya folder milik Anda.
-- `app/`, `shared/`, `modules/akun/AuthContext.jsx`, dan `modules/akun/useAuth.js` hanya diubah oleh **Ihsan**. Butuh komponen atau fungsi bantu baru? Minta ke Ihsan, atau buat dulu di folder modul Anda sendiri.
+- `app/`, `shared/`, `modules/akun/AuthContext.jsx`, `modules/akun/useAuth.js`, dan `modules/paket/components/RoomAvailabilityToggle.jsx` hanya diubah oleh **Ihsan**. Butuh komponen atau fungsi bantu baru? Minta ke Ihsan, atau buat dulu di folder modul Anda sendiri.
 
 ### 2. Komponen dasar wajib dipakai
 - Pakai komponen dari `@/shared/components/ui` (lihat "Komponen dasar"), jangan membuat tombol, kolom isian, atau kartu sendiri. Dengan begitu tampilan seragam, dan perubahan gaya cukup dilakukan di satu tempat.
@@ -53,7 +53,7 @@ npm run dev               # buka http://localhost:5173
 ### 3. Kontrak antarmodul (jangan diubah tanpa kabar)
 | Kontrak | Pemilik | Dipakai di |
 |---|---|---|
-| `RoomAvailabilityToggle` dengan props `{ packageId, isOpen, onChanged }` | Larisa (**dikerjakan paling awal**) | Antrean |
+| `RoomAvailabilityToggle` dengan props `{ packageId, isOpen, onChanged }` | Ihsan (sudah selesai) | Antrean |
 | `getPackages()` dan `getAddons()` di `modules/paket/api.js` | Larisa | Antrean, Kasir |
 | Alamat `/kasir/:id` (`id` = id kunjungan) | Ihsan | Antrean |
 | `useAuth()` → `{ user, logout, ... }`, `user.role` | Ihsan | Semua |
@@ -78,7 +78,7 @@ npm run dev               # buka http://localhost:5173
 ### 6. Jadwal
 | Tanggal | Ihsan | Larisa |
 |---|---|---|
-| 15 Nov | Mulai Antrean | `RoomAvailabilityToggle` + Kelola Paket |
+| 15 Nov | Mulai Antrean | Kelola Paket (form paket dulu, karena data paket dibutuhkan untuk menguji Antrean & Kasir) |
 | 16–17 Nov | Antrean & Kasir | Dashboard, Laporan, Profil |
 | 18 Nov | Uji bersama alur penuh: pelanggan datang → bayar → foto → nota → laporan | |
 | 19 Nov | Serah terima | |
@@ -232,6 +232,7 @@ Sudah berfungsi:
 - Login sesuai Figma, logout, penjaga halaman per peran.
 - Menu samping sesuai Figma (komputer) dan bilah atas (HP).
 - Semua komponen dasar sesuai Figma, termasuk `StatCard`, `SegmentedControl`, dan `Table`.
+- Tombol Tutup/Buka Ruangan (`RoomAvailabilityToggle`), siap dipasang di Antrean.
 - Tab di halaman Antrean.
 - Profil: ganti kata sandi; reset kata sandi Admin untuk Owner.
 - Semua fungsi `api.js` sesuai `docs/API.md`.
