@@ -12,9 +12,9 @@ FR-11, FR-15 · UC-21, UC-22, UC-23.
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
-| `pages/DashboardPage.jsx` | Dashboard | Owner | TODO |
-| `pages/ReportsPage.jsx` | Laporan | Owner | TODO |
-| `components/` | dibuat sesuai kebutuhan, mis. `SalesChart` (grafik Recharts) | | — |
+| `pages/DashboardPage.jsx` | Dashboard | Owner | Selesai |
+| `pages/ReportsPage.jsx` | Laporan | Owner | Selesai |
+| `components/` | `PeriodFilter.jsx`, `SalesChart.jsx`, `CashMethodChart.jsx` | Owner | Selesai |
 
 Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
 - `PageHeader` dengan `actions={<SegmentedControl …/>}`: judul + pilihan periode di kanan, seperti desain;
@@ -70,13 +70,13 @@ Parameter periode: `{ period: 'today' | 'week' | 'month' | 'custom', from?, to? 
 Tidak memakai modul lain, hanya `shared/` (`formatRupiah`, `formatDate`, `REPORT_PERIODS`, `saveBlob`). Dashboard adalah halaman awal Owner (`HOME_BY_ROLE` di `shared/utils/constants.js`).
 
 ## Checklist selesai
-- [ ] Pilihan periode (dipakai Dashboard dan Laporan)
-- [ ] Dashboard: nilai penjualan, sesi selesai, penerimaan, paket terlaris
-- [ ] Grafik penjualan dan penerimaan per metode (Recharts)
-- [ ] Laporan L-01 s.d. L-04 dalam tabel
-- [ ] Unduh PDF dan Excel
-- [ ] Nyaman dibuka di HP
-- [ ] `npm run build` dan `npm run lint` lulus
+- [x] Pilihan periode (dipakai Dashboard dan Laporan)
+- [x] Dashboard: nilai penjualan, sesi selesai, penerimaan, paket terlaris
+- [x] Grafik penjualan dan penerimaan per metode (Recharts)
+- [x] Laporan L-01 s.d. L-04 dalam tabel
+- [x] Unduh PDF dan Excel
+- [x] Nyaman dibuka di HP
+- [x] `npm run build` dan `npm run lint` lulus
 - [ ] Semua langkah uji di bawah lulus
 
 ## Cara mengetes

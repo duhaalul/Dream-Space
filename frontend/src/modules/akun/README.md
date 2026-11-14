@@ -15,7 +15,7 @@ FR-01, FR-13 · UC-01, UC-02, UC-24.
 |---|---|---|---|
 | `pages/LoginPage.jsx` | Selamat Datang Kembali | publik | Selesai, sesuai Figma |
 | `components/LoginBrandPanel.jsx` | Panel biru logo Dream Space (kanan Login, layar lebar saja) | publik | Selesai |
-| `pages/ProfilePage.jsx` | Profil | Admin, Owner | Berfungsi, tampilan belum sesuai Figma |
+| `pages/ProfilePage.jsx` | Profil | Admin, Owner | Selesai, sesuai Figma |
 | `components/ChangePasswordForm.jsx` | Profil › ubah kata sandi | Admin, Owner | Selesai |
 | `components/ResetAdminPasswordForm.jsx` | Profil Owner › reset kata sandi Admin | Owner | Selesai |
 | `AuthContext.jsx`, `useAuth.js` | — | semua | Selesai |
@@ -67,10 +67,10 @@ Error lain cukup tampilkan `error.message` dengan `<Alert variant="error">`.
 - [x] Login, logout, ganti kata sandi, reset kata sandi Admin
 - [x] Tampilan Login sesuai Figma (tanpa Lupa Password, Ingat Saya, dan tab Owner/Admin)
 - [ ] Ganti `src/assets/logo-ds.png` dengan ekspor logo resmi dari Figma (sekarang hasil potongan gambar desain)
-- [ ] Tampilan Profil Admin dan Owner sesuai Figma
-- [ ] Ubah nama tampilan dengan `updateProfile` (opsional)
-- [ ] Profil nyaman dibuka di HP (Owner)
-- [ ] `npm run build` dan `npm run lint` lulus
+- [x] Tampilan Profil Admin dan Owner sesuai Figma
+- [x] Ubah nama tampilan dengan `updateProfile` (opsional)
+- [x] Profil nyaman dibuka di HP (Owner)
+- [x] `npm run build` dan `npm run lint` lulus
 - [ ] Semua langkah uji di bawah lulus
 
 ## Cara mengetes

@@ -14,9 +14,9 @@ FR-02, FR-03 · UC-03, UC-04, UC-05, UC-06.
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
-| `pages/PackagesPage.jsx` | Paket (Admin) / Kelola Paket (Owner) | Admin lihat, Owner kelola | TODO |
-| `components/PackageForm.jsx` | Kelola Paket › Pengaturan Skema Harga & Kapasitas Paket | Owner | TODO |
-| `components/AddonManager.jsx` | Kelola Paket › Tambahan layanan (dulu di Pengaturan) | Owner | TODO |
+| `pages/PackagesPage.jsx` | Paket (Admin) / Kelola Paket (Owner) | Admin lihat, Owner kelola | Selesai |
+| `components/PackageForm.jsx` | Kelola Paket › Pengaturan Skema Harga & Kapasitas Paket | Owner | Selesai |
+| `components/AddonManager.jsx` | Kelola Paket › Tambahan layanan (dulu di Pengaturan) | Owner | Selesai |
 | `components/RoomAvailabilityToggle.jsx` | Antrean › tombol tutup/buka ruangan | Admin | Selesai (Ihsan) |
 
 ## Hak akses
@@ -76,15 +76,15 @@ Contoh body paket:
 - Jangan mengubah nama atau props komponen dan fungsi di atas tanpa koordinasi.
 
 ## Checklist selesai
-- [ ] Daftar paket (nama, kode, harga, kapasitas, latar, aktif/nonaktif, status ruangan)
-- [ ] Form paket dengan 3 cara hitung harga + pratinjau harga
-- [ ] Kelola latar per paket
-- [ ] Centang tambahan yang tersedia per paket
-- [ ] Kelola tambahan layanan (`AddonManager`)
+- [x] Daftar paket (nama, kode, harga, kapasitas, latar, aktif/nonaktif, status ruangan)
+- [x] Form paket dengan 3 cara hitung harga + pratinjau harga
+- [x] Kelola latar per paket
+- [x] Centang tambahan yang tersedia per paket
+- [x] Kelola tambahan layanan (`AddonManager`)
 - [x] Tombol tutup/buka ruangan (`RoomAvailabilityToggle`) dengan alasan (dibuat Ihsan)
-- [ ] Admin hanya melihat (tanpa tombol ubah)
-- [ ] Kelola Paket nyaman dibuka di HP (Owner)
-- [ ] `npm run build` dan `npm run lint` lulus
+- [x] Admin hanya melihat (tanpa tombol ubah)
+- [x] Kelola Paket nyaman dibuka di HP (Owner)
+- [x] `npm run build` dan `npm run lint` lulus
 - [ ] Semua langkah uji di bawah lulus
 
 ## Cara mengetes
