@@ -103,7 +103,7 @@ Data penting dari `getCashierDetail`:
 1. Paket Rp100.000, bayar Tunai Rp150.000 → kembalian Rp50.000.
 2. Mulai foto (di Antrean) → tambah waktu Rp20.000 → tombol Selesaikan nonaktif → bayar Rp20.000 → tombol aktif → selesai dan nota terbuka.
 3. Transfer melebihi sisa tagihan → ditolak.
-4. Setelah lunas dan sebelum dipanggil, ganti ke paket lebih murah → muncul kelebihan bayar → refund → bisa diselesaikan.
+4. Setelah lunas dan sebelum dipanggil, ganti ke paket lebih murah → Mulai foto ditolak karena ada kelebihan bayar → refund kelebihan bayar → Mulai foto berhasil.
 5. Riwayat: koreksi metode bayar dengan alasan → riwayat koreksi bertambah. Login Owner → riwayat koreksi terlihat, tombol koreksi tidak ada.
 6. Cetak ulang nota dari Riwayat.
 7. Tekan Bayar dua kali dengan cepat → hanya 1 pembayaran tercatat.

@@ -53,7 +53,7 @@ Error lain cukup tampilkan `error.message` dengan `<Alert variant="error">`.
 
 | Kode | Tindakan di tampilan |
 |---|---|
-| `INVALID_CREDENTIALS` | Pesan "Username atau kata sandi salah", tetap di Login |
+| `INVALID_CREDENTIALS` | Pesan "Nama pengguna atau kata sandi tidak cocok. Silakan coba lagi." (sudah dipetakan di `pages/LoginPage.jsx`), tetap di Login |
 | `LOGIN_RATE_LIMIT` | Terlalu banyak percobaan; minta coba lagi nanti |
 | `INVALID_PASSWORD` | Kata sandi lama salah |
 | `SAME_PASSWORD` | Kata sandi baru sama dengan yang lama |
