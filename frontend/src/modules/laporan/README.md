@@ -7,14 +7,21 @@ Owner memantau penjualan dan penerimaan uang, melihat laporan per periode, dan m
 FR-11, FR-15 · UC-21, UC-22, UC-23.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Larisa**
 
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
 | `pages/DashboardPage.jsx` | Dashboard | Owner | TODO |
 | `pages/ReportsPage.jsx` | Laporan | Owner | TODO |
-| `components/` | dibuat sesuai kebutuhan, mis. `PeriodPicker` (dipakai kedua halaman), `StatCard`, `SalesChart` | | — |
+| `components/` | dibuat sesuai kebutuhan, mis. `SalesChart` (grafik Recharts) | | — |
+
+Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
+- `PageHeader` dengan `actions={<SegmentedControl …/>}`: judul + pilihan periode di kanan, seperti desain;
+- `StatCard`: 4 kartu angka di atas (`tone="green"` untuk Sesi Selesai);
+- `Card`: kotak grafik dan tabel;
+- `Table`: tabel laporan;
+- `Button variant="danger"` / `variant="soft-success"`: tombol Unduh PDF / Unduh Excel.
 
 ## Hak akses
 Owner saja. Admin tidak punya Dashboard maupun Laporan; laporan shift Admin sudah dihapus dari desain.
@@ -40,7 +47,7 @@ Parameter periode: `{ period: 'today' | 'week' | 'month' | 'custom', from?, to? 
 **Data untuk grafik Dashboard.** Endpoint dashboard tidak mengirim data per jam atau per metode, jadi diolah dari laporan:
 - grafik penjualan: `getReport('sales', params)` → kelompokkan `total` per jam/hari dari `completed_at`;
 - penerimaan per metode: `getReport('cash', params)` → jumlahkan `net` per `method`;
-- paket terlaris: `packages[0]` dari `getDashboard`.
+- paket terlaris: `packages[0]` dari `getDashboard` bila `sessions > 0`; bila belum ada sesi, tampilkan "Belum ada" (backend juga mengirim paket dengan 0 sesi).
 
 ## Aturan wajib
 - Pilihan periode: Hari ini, Minggu ini, Bulan ini, Rentang tanggal (maksimal 367 hari; `from` dan `to` wajib).

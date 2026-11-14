@@ -7,7 +7,7 @@ Menerima pembayaran, menyelesaikan sesi, mencetak nota, mengembalikan kelebihan 
 FR-06, FR-07, FR-09, FR-10, FR-12, FR-14 · UC-13 s.d. UC-15, UC-17 s.d. UC-20.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Ihsan**
 
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
@@ -15,6 +15,13 @@ _(diisi PM)_
 | `pages/CashierPage.jsx` | Kasir: Pelanggan Aktif · Rincian Tagihan · Pembayaran | Admin | TODO |
 | `pages/HistoryPage.jsx` | Riwayat + Koreksi Data Transaksi | Admin; Owner lihat | TODO |
 | `components/` | dibuat sesuai kebutuhan, mis. `ActiveVisitList`, `BillDetails`, `PaymentForm`, `CorrectionPanel` | | — |
+
+Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
+- `Card`: tiga kolom Kasir;
+- `SegmentedControl tone="brand"`: pilihan metode Tunai/Transfer/QRIS;
+- `Button variant="primary"` (Terima Pembayaran) dan `variant="success"` (Selesaikan & Cetak Nota);
+- `StatCard` + `Table`: ringkasan dan daftar di Riwayat;
+- `Badge`: status bayar.
 
 Route: `/kasir` = daftar pelanggan aktif; `/kasir/:id` = pelanggan (kunjungan) terpilih.
 
@@ -96,7 +103,7 @@ Data penting dari `getCashierDetail`:
 1. Paket Rp100.000, bayar Tunai Rp150.000 → kembalian Rp50.000.
 2. Mulai foto (di Antrean) → tambah waktu Rp20.000 → tombol Selesaikan nonaktif → bayar Rp20.000 → tombol aktif → selesai dan nota terbuka.
 3. Transfer melebihi sisa tagihan → ditolak.
-4. Setelah lunas dan sebelum dipanggil, ganti ke paket lebih murah → muncul kelebihan bayar → refund → bisa diselesaikan.
+4. Setelah lunas dan sebelum dipanggil, ganti ke paket lebih murah → Mulai foto ditolak karena ada kelebihan bayar → refund kelebihan bayar → Mulai foto berhasil.
 5. Riwayat: koreksi metode bayar dengan alasan → riwayat koreksi bertambah. Login Owner → riwayat koreksi terlihat, tombol koreksi tidak ada.
 6. Cetak ulang nota dari Riwayat.
 7. Tekan Bayar dua kali dengan cepat → hanya 1 pembayaran tercatat.

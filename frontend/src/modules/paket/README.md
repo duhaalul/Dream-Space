@@ -7,7 +7,9 @@ Owner mengelola paket, harga, kapasitas, latar, dan tambahan layanan. Admin meli
 FR-02, FR-03 · UC-03, UC-04, UC-05, UC-06.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Larisa**, kecuali `components/RoomAvailabilityToggle.jsx` (dibuat dan dipegang Ihsan, sudah selesai).
+
+> **Prioritas (15 Nov):** kerjakan form paket lebih dulu, karena data paket dibutuhkan untuk menguji Antrean dan Kasir.
 
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
@@ -15,7 +17,7 @@ _(diisi PM)_
 | `pages/PackagesPage.jsx` | Paket (Admin) / Kelola Paket (Owner) | Admin lihat, Owner kelola | TODO |
 | `components/PackageForm.jsx` | Kelola Paket › Pengaturan Skema Harga & Kapasitas Paket | Owner | TODO |
 | `components/AddonManager.jsx` | Kelola Paket › Tambahan layanan (dulu di Pengaturan) | Owner | TODO |
-| `components/RoomAvailabilityToggle.jsx` | Antrean › tombol tutup/buka ruangan | Admin | TODO |
+| `components/RoomAvailabilityToggle.jsx` | Antrean › tombol tutup/buka ruangan | Admin | Selesai (Ihsan) |
 
 ## Hak akses
 | Tindakan | Admin | Owner |
@@ -79,7 +81,7 @@ Contoh body paket:
 - [ ] Kelola latar per paket
 - [ ] Centang tambahan yang tersedia per paket
 - [ ] Kelola tambahan layanan (`AddonManager`)
-- [ ] Tombol tutup/buka ruangan (`RoomAvailabilityToggle`) dengan alasan
+- [x] Tombol tutup/buka ruangan (`RoomAvailabilityToggle`) dengan alasan (dibuat Ihsan)
 - [ ] Admin hanya melihat (tanpa tombol ubah)
 - [ ] Kelola Paket nyaman dibuka di HP (Owner)
 - [ ] `npm run build` dan `npm run lint` lulus

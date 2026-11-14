@@ -7,7 +7,7 @@ Mencatat reservasi WhatsApp dan pelanggan datang langsung, menampilkan antrean p
 FR-03, FR-04, FR-05, FR-08 · UC-07 s.d. UC-12, UC-16.
 
 ## Penanggung jawab
-_(diisi PM)_
+**Ihsan**
 
 ## Halaman & komponen
 Satu halaman `/antrean` dengan 3 tab (tab aktif disimpan di URL `?tab=`).
@@ -82,7 +82,12 @@ Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar ti
 
 ## Hubungan dengan modul lain
 - **Memakai dari `paket`:**
-  - `RoomAvailabilityToggle` (`@/modules/paket/components/RoomAvailabilityToggle`) untuk tutup/buka ruangan;
+  - `RoomAvailabilityToggle` (`@/modules/paket/components/RoomAvailabilityToggle`) untuk tutup/buka ruangan. Sudah jadi; tinggal dipasang di banner ruangan atau kartu paket. Contoh:
+    ```jsx
+    // room = satu baris dari getQueueRooms(): { package_id, name, is_open (0/1), closed_reason, ... }
+    <RoomAvailabilityToggle packageId={room.package_id} packageName={room.name} isOpen={!!room.is_open} onChanged={reload} />
+    ```
+    Admin melihat "Tutup Ruangan" (dialog alasan) atau "Buka Ruangan"; Owner tidak melihat tombolnya. Contoh langsung: `/dev/komponen`;
   - `getPackages()` (`@/modules/paket/api`) untuk pilihan paket.
 - **Menuju `kasir`:** tombol "Selesaikan sesi" dan penolakan "Mulai foto" membuka `/kasir/:id` (`id` = id kunjungan).
 
