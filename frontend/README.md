@@ -20,7 +20,7 @@ cp .env.example .env      # Windows PowerShell: Copy-Item .env.example .env
 npm run dev               # buka http://localhost:5173
 ```
 
-- Isi `VITE_API_URL` di `.env` dengan alamat backend (bawaan `http://localhost:3000/api`). Panduan backend: `docs/OPERATIONS.md` di branch `backend-dream-space`.
+- Isi `VITE_API_URL` di `.env` dengan alamat backend (bawaan `http://localhost:3000/api`). Cara menyiapkan database dan backend: bagian [Cara Menjalankan Aplikasi](../README.md#cara-menjalankan-aplikasi) di README utama (detail: `backend/docs/OPERATIONS.md`).
 - Contoh semua komponen dasar: buka **http://localhost:5173/dev/komponen** (hanya saat `npm run dev`).
 - Lalu baca **README modul Anda** (tabel "Pegangan kerja per modul" di bawah).
 

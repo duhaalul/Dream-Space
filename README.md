@@ -28,7 +28,7 @@ Sistem menggunakan dua akun tetap: satu akun Admin bersama dan satu akun Owner.
 | Modul | Fitur |
 | --- | --- |
 | **Paket dan Harga** | Pengelolaan paket, kode antrean, pilihan latar, kapasitas orang, harga, dan tambahan layanan. |
-| **Reservasi dan Antrean** | Reservasi WhatsApp, pendaftaran walk-in, konfirmasi kedatangan, prioritas reservasi, panggil, lewati, kembali, mulai, dan selesai. |
+| **Reservasi dan Antrean** | Reservasi WhatsApp, pendaftaran walk-in, ubah data kunjungan, konfirmasi kedatangan, prioritas reservasi, panggil, lewati, kembali, mulai, selesai, serta tutup/buka ruangan sementara. |
 | **Kasir dan Pembayaran** | DP reservasi, pembayaran tunai/transfer/QRIS, kembalian tunai, tambahan layanan, refund kelebihan bayar, dan koreksi dengan riwayat audit. |
 | **Nota dan Riwayat** | Nota PDF setelah sesi selesai, cetak ulang nota, serta riwayat transaksi selesai dan dibatalkan. |
 | **Dashboard dan Laporan** | Ringkasan penjualan, kinerja paket, arus kas, dan kunjungan, dengan ekspor PDF dan Excel. |
@@ -47,7 +47,9 @@ Sistem menggunakan dua akun tetap: satu akun Admin bersama dan satu akun Owner.
 
 DP belum dianggap cukup untuk memulai foto jika masih ada sisa tagihan. Pembatalan hanya dapat dilakukan sebelum foto dimulai; pembayaran yang sudah diterima ditahan sesuai aturan usaha. Refund digunakan untuk kelebihan bayar.
 
-## Teknologi Backend
+## Teknologi
+
+### Backend
 
 | Komponen | Teknologi |
 | --- | --- |
@@ -59,34 +61,166 @@ DP belum dianggap cukup untuk memulai foto jika masih ada sisa tagihan. Pembatal
 | Nota dan laporan PDF | pdfmake |
 | Ekspor Excel | ExcelJS |
 | Pengujian | Node.js Test Runner dan Supertest |
-| CI | GitHub Actions |
+| CI | GitHub Actions (workflow masih di branch `backend-dream-space`, belum dipindah ke `main`) |
+
+### Frontend
+
+| Komponen | Teknologi |
+| --- | --- |
+| Bahasa | JavaScript (JSX) |
+| Library antarmuka | React 19 |
+| Build dan server pengembangan | Vite 8 |
+| Navigasi halaman | React Router 7 |
+| Tampilan (styling) | Tailwind CSS 4 |
+| Grafik dashboard dan laporan | Recharts |
+| Ikon | lucide-react |
+| Font | Poppins dan Fraunces |
+| Pemeriksaan kode | oxlint |
+| Komunikasi ke backend | `fetch` dengan token Bearer ([`shared/api/client.js`](frontend/src/shared/api/client.js)) |
+
+## Struktur Repositori
+
+```text
+Dream-Space/
+├── backend/                 API Express + MySQL
+│   ├── src/                 kode server (auth, katalog, antrean, kasir, laporan)
+│   ├── migrations/          struktur tabel database
+│   └── docs/                kontrak API, ERD, panduan operasional
+└── frontend/                aplikasi web React
+    └── src/
+        ├── app/             rute, menu samping, proteksi login per peran
+        ├── modules/         satu folder per modul, masing-masing dengan README
+        │   ├── akun/        login, profil, ganti & reset kata sandi
+        │   ├── paket/       paket, latar, tambahan layanan, tutup/buka ruangan
+        │   ├── antrean/     pendaftaran, reservasi, papan antrean, detail kunjungan
+        │   ├── kasir/       kasir, nota, riwayat, koreksi transaksi
+        │   └── laporan/     dashboard dan laporan Owner
+        └── shared/          komponen dasar, koneksi API, format Rupiah/tanggal
+```
+
+## Cara Menjalankan Aplikasi
+
+Panduan menjalankan aplikasi lengkap (backend + frontend) di laptop sendiri, misalnya untuk mencoba atau menguji. Setiap laptop memakai database MySQL sendiri, jadi data antar laptop **tidak** saling terhubung.
+
+### 1. Persiapan
+
+| Perlu | Keterangan |
+| --- | --- |
+| [Git](https://git-scm.com/) | Untuk mengambil kode. |
+| [Node.js](https://nodejs.org/) 24 (atau 22) | Backend meminta Node 24; Node 22 tetap jalan, hanya muncul peringatan versi saat `npm ci`. |
+| [Laragon](https://laragon.org/) | Untuk MySQL 8 (minimal 8.0.16). |
+
+### 2. Ambil kode
+
+```bash
+git clone https://github.com/duhaalul/Dream-Space.git
+cd Dream-Space
+```
+
+Sudah pernah clone? Cukup perbarui: `git checkout main` lalu `git pull origin main`.
+
+### 3. Buat database
+
+Buka Laragon → **Start All**. Lalu buka **Database** (HeidiSQL/phpMyAdmin) atau **Terminal** → `mysql -u root`, dan jalankan (ganti `SandiDatabaseAnda`):
+
+```sql
+CREATE DATABASE dream_space CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER 'dream_space'@'localhost' IDENTIFIED BY 'SandiDatabaseAnda';
+CREATE USER 'dream_space'@'127.0.0.1' IDENTIFIED BY 'SandiDatabaseAnda';
+GRANT ALL PRIVILEGES ON dream_space.* TO 'dream_space'@'localhost';
+GRANT ALL PRIVILEGES ON dream_space.* TO 'dream_space'@'127.0.0.1';
+```
+
+### 4. Jalankan backend (terminal 1)
+
+```bash
+cd backend
+npm ci
+cp .env.example .env          # Windows PowerShell: Copy-Item .env.example .env
+```
+
+Buka `backend/.env`, lalu isi:
+
+| Isian | Diisi dengan |
+| --- | --- |
+| `DB_PASSWORD` | Sandi database dari langkah 3. |
+| `JWT_SECRET` | Teks acak minimal 32 karakter. Buat dengan: `node -e "console.log(require('crypto').randomBytes(36).toString('base64url'))"` |
+| `SEED_ADMIN_PASSWORD`, `SEED_OWNER_PASSWORD` | Sandi awal akun `admin` dan `owner`, minimal 12 karakter. Catat; dipakai untuk login pertama. |
+
+Isian lain (`PORT=3000`, `FRONTEND_ORIGIN=http://localhost:5173`, `DB_NAME`, `DB_USER`) biarkan seperti contoh. Lalu:
+
+```bash
+npm run db:migrate    # membuat tabel (sekali saja)
+npm run db:seed       # membuat akun admin & owner (sekali saja)
+npm run dev
+```
+
+Cek di browser: http://localhost:3000/health/ready harus menampilkan `{"status":"ok","database":"connected"}`.
+
+### 5. Jalankan frontend (terminal 2)
+
+```bash
+cd frontend
+cp .env.example .env          # Windows PowerShell: Copy-Item .env.example .env
+npm ci
+npm run dev
+```
+
+Buka **http://localhost:5173**. Biarkan kedua terminal tetap terbuka selama memakai aplikasi; tekan `Ctrl + C` untuk mematikan.
+
+### 6. Login pertama
+
+1. Login sebagai `owner` dengan sandi `SEED_OWNER_PASSWORD`. Sistem meminta **ganti kata sandi** dulu (minimal 12 karakter), lalu login lagi dengan sandi baru.
+2. Lakukan hal yang sama untuk `admin` dengan `SEED_ADMIN_PASSWORD`.
+3. Sebagai Owner, buka **Kelola Paket**: buat tambahan layanan, paket, dan latarnya. Setelah ada paket, Admin bisa mencoba Antrean, Kasir, dan Riwayat.
+
+### 7. Menjalankan lagi di hari lain
+
+Laragon → **Start All**, lalu `npm run dev` di folder `backend`, kemudian `npm run dev` di folder `frontend`. Migrasi dan seed **tidak** perlu diulang.
+
+<details>
+<summary><strong>Masalah umum</strong></summary>
+
+- **`npm run dev` gagal karena port 3000 atau 5173 sudah dipakai**: server lain masih berjalan. Tutup terminal lama atau matikan dengan `Ctrl + C`.
+- **"Terlalu banyak percobaan login"**: backend membatasi 20 percobaan login per 15 menit per komputer. Tunggu sampai 15 menit, lalu coba lagi.
+- **Admin lupa kata sandi**: Owner mereset kata sandi Admin di halaman **Profil**; Admin wajib menggantinya saat login berikutnya.
+- **Owner lupa kata sandi / ingin mulai dari awal**: kosongkan database `dream_space` (hapus lalu buat lagi seperti langkah 3), lalu ulangi `npm run db:migrate` dan `npm run db:seed`. Semua data di laptop tersebut ikut terhapus.
+- **Health check tidak `connected`**: periksa Laragon sudah Start All dan isian `DB_*` di `backend/.env`.
+- **Jangan** mengirim file `.env` ke GitHub atau grup; isinya sandi.
+
+</details>
 
 ## Status Pengembangan
 
-Implementasi backend tersedia pada branch **[`backend-dream-space`](https://github.com/duhaalul/Dream-Space/tree/backend-dream-space)** dan diajukan melalui **[Draft PR #2 — Backend Dream Space](https://github.com/duhaalul/Dream-Space/pull/2)**.
+Backend dan frontend sudah berada di branch `main`, masing-masing di folder [`backend/`](backend/) dan [`frontend/`](frontend/).
 
-Backend mencakup migrasi database, autentikasi, katalog, antrean, kasir, laporan, pengujian, serta script backup. Pemeriksaan lokal dan CI sebelumnya berhasil, termasuk 2 unit test dan 13 integration test.
+| Bagian | Pengembang | Status |
+| --- | --- | --- |
+| Backend: migrasi, autentikasi, katalog, antrean, kasir, laporan, backup | Duha | Selesai; unit & integration test lulus |
+| Frontend: menu, komponen dasar, Login | Ihsan | Selesai |
+| Frontend: Antrean (pendaftaran, per paket, ringkasan, detail kunjungan) | Ihsan | Selesai |
+| Frontend: Kasir dan Riwayat (pembayaran, refund, nota, koreksi) | Ihsan | Selesai |
+| Frontend: Paket/Kelola Paket, Dashboard, Laporan, Profil | Larisa | Selesai |
 
-Integrasi frontend, UAT studio, pengujian printer fisik, dan deployment masih menjadi tahap berikutnya. README ini menjelaskan proyek; kode backend belum digabungkan ke branch `main`.
+Tahap berikutnya: uji integrasi tim, UAT di studio, pengujian printer nota, dan deployment.
+
+Batasan yang diketahui (rincian di README modul [antrean](frontend/src/modules/antrean/README.md) dan [kasir](frontend/src/modules/kasir/README.md)):
+- Jam janji reservasi belum bisa diubah karena backend belum menyediakan endpoint-nya.
+- Koreksi transaksi baru mencakup nama pelanggan serta metode/referensi pembayaran; koreksi nominal belum tersedia.
 
 ## Dokumentasi dan Mulai Pengembangan
 
-- [Panduan setup, akun, database, dan backup](https://github.com/duhaalul/Dream-Space/blob/backend-dream-space/docs/OPERATIONS.md)
-- [Kontrak API untuk integrasi frontend](https://github.com/duhaalul/Dream-Space/blob/backend-dream-space/docs/API.md)
-- [Arsitektur dan pemetaan kebutuhan sistem](https://github.com/duhaalul/Dream-Space/blob/backend-dream-space/docs/ARCHITECTURE.md)
-- [ERD Revisi 05](https://github.com/duhaalul/Dream-Space/blob/backend-dream-space/docs/ERD_Revisi_05.md)
-- [Diagram ERD Mermaid](https://github.com/duhaalul/Dream-Space/blob/backend-dream-space/docs/erd.mmd)
-- [Klarifikasi pembayaran sebelum mulai foto](https://github.com/duhaalul/Dream-Space/blob/backend-dream-space/docs/PAYMENT_RULE_CHANGE.md)
+- [Panduan operasional backend: database, akun, backup](backend/docs/OPERATIONS.md)
+- [Kontrak API untuk integrasi frontend](backend/docs/API.md)
+- [Arsitektur dan pemetaan kebutuhan sistem](backend/docs/ARCHITECTURE.md)
+- [ERD Revisi 05](backend/docs/ERD_Revisi_05.md)
+- [Diagram ERD Mermaid](backend/docs/erd.mmd)
+- [Klarifikasi pembayaran sebelum mulai foto](backend/docs/PAYMENT_RULE_CHANGE.md)
+- [Catatan integrasi frontend–backend](backend/docs/FRONTEND_INTEGRATION.md)
+- [README backend](backend/README.md): perintah pengujian dan build.
+- [README frontend](frontend/README.md): pembagian kerja tim, aturan Git, komponen dasar, dan pegangan tiap modul.
 
-Untuk mengambil kode backend:
-
-```bash
-git clone --branch backend-dream-space https://github.com/duhaalul/Dream-Space.git
-cd Dream-Space/backend
-npm ci
-```
-
-Lanjutkan konfigurasi database, file `.env`, migrasi, dan seed akun mengikuti panduan setup. Kredensial lokal dan data database tidak disimpan dalam repositori.
+Kredensial lokal (`.env`) dan data database tidak disimpan di repositori.
 
 ## Batas Lingkup
 
