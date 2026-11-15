@@ -165,7 +165,7 @@ export default function AddonManager({ addons: externalAddons, onChanged }) {
             label="Harga (Rp) *"
             type="number"
             min="0"
-            step="1000"
+            step="1"
             placeholder="20000"
             value={form.price}
             onChange={(event) => {
@@ -225,7 +225,7 @@ export default function AddonManager({ addons: externalAddons, onChanged }) {
                     <input
                       type="number"
                       min="0"
-                      step="1000"
+                      step="1"
                       value={editForm.price}
                       onChange={(event) =>
                         setEditForm((prev) => ({ ...prev, price: event.target.value }))

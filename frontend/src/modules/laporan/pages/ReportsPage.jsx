@@ -159,8 +159,11 @@ export default function ReportsPage() {
     const regularRows = []
     const cancelledRows = []
     for (const row of rows) {
-      if (row.category === 'BATAL_DITAHAN') cancelledRows.push(row)
-      else regularRows.push(row)
+      // id pembayaran dan id refund berasal dari tabel berbeda dan bisa sama,
+      // jadi kunci baris tabel memakai gabungan jenis + id.
+      const keyed = { ...row, row_key: `${row.kind}-${row.id}` }
+      if (row.category === 'BATAL_DITAHAN') cancelledRows.push(keyed)
+      else regularRows.push(keyed)
     }
     return { regularRows, cancelledRows }
   }, [reportCode, rows])
@@ -545,7 +548,15 @@ export default function ReportsPage() {
             <Table
               columns={columnsByCode}
               rows={reportCode === 'cash' ? cashSplit.regularRows : rows}
-              rowKey={reportCode === 'packages' ? 'package_id' : reportCode === 'sales' ? 'transaction_no' : 'id'}
+              rowKey={
+                reportCode === 'packages'
+                  ? 'package_id'
+                  : reportCode === 'sales'
+                    ? 'transaction_no'
+                    : reportCode === 'cash'
+                      ? 'row_key'
+                      : 'id'
+              }
               empty="Belum ada data pada periode ini."
             />
           )}
@@ -565,7 +576,7 @@ export default function ReportsPage() {
             <Table
               columns={columnsByCode}
               rows={cashSplit.cancelledRows}
-              rowKey="id"
+              rowKey="row_key"
               empty="Tidak ada penerimaan dari transaksi dibatalkan pada periode ini."
             />
           </Card>

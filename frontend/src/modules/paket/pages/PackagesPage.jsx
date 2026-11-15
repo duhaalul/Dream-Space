@@ -55,6 +55,9 @@ export default function PackagesPage() {
   const [loading, setLoading] = useState(true)
   const [togglingId, setTogglingId] = useState(null)
   const [error, setError] = useState(null)
+  // Pesan sukses/gagal form paket disimpan di sini (bukan di PackageForm), karena PackageForm
+  // dipasang ulang setelah data dimuat ulang sehingga state di dalamnya ikut hilang.
+  const [formNotice, setFormNotice] = useState(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -123,11 +126,13 @@ export default function PackagesPage() {
 
   function handleSelectForEdit(pkg) {
     setSelectedPackageId(pkg.id)
+    setFormNotice(null)
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function handleStartCreate() {
     setSelectedPackageId(null)
+    setFormNotice(null)
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -410,13 +415,18 @@ export default function PackagesPage() {
                 }
                 addons={addons}
                 allowedAddonIds={selectedAllowedAddonIds}
+                notice={formNotice}
+                onNotice={setFormNotice}
                 onSaved={async (savedPkg) => {
                   await loadData()
                   if (savedPkg?.id && !selectedPackageId) {
                     setSelectedPackageId(savedPkg.id)
                   }
                 }}
-                onCancelEdit={() => setSelectedPackageId(null)}
+                onCancelEdit={() => {
+                  setSelectedPackageId(null)
+                  setFormNotice(null)
+                }}
               />
             </div>
 

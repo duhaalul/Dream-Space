@@ -97,6 +97,10 @@ export default function PackageForm({
   backgrounds = [],
   addons = [],
   allowedAddonIds = [],
+  // notice = { scope: 'package' | 'addons', type: 'success' | 'error', text, requestId? }
+  // Disimpan di halaman induk supaya tidak hilang saat komponen ini dipasang ulang setelah simpan.
+  notice = null,
+  onNotice,
   onSaved,
   onCancelEdit,
 }) {
@@ -105,7 +109,6 @@ export default function PackageForm({
   const [previewPersons, setPreviewPersons] = useState(4)
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState(null)
-  const [successMessage, setSuccessMessage] = useState(null)
   const [savingPackage, setSavingPackage] = useState(false)
 
   // State latar paket
@@ -118,12 +121,11 @@ export default function PackageForm({
   // State tambahan layanan per paket
   const [checkedAddonIds, setCheckedAddonIds] = useState(() => allowedAddonIds)
   const [savingAddons, setSavingAddons] = useState(false)
-  const [addonNotice, setAddonNotice] = useState(null)
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setFieldErrors((prev) => ({ ...prev, [field]: null }))
-    setSuccessMessage(null)
+    if (notice) onNotice?.(null)
   }
 
   function validateForm() {
@@ -195,17 +197,21 @@ export default function PackageForm({
 
     setSavingPackage(true)
     setError(null)
-    setSuccessMessage(null)
+    onNotice?.(null)
 
     try {
       let saved
       if (isEditing) {
         saved = await updatePackage(selectedPackage.id, payload)
-        setSuccessMessage(`Paket "${saved.name}" berhasil diperbarui.`)
+        onNotice?.({ scope: 'package', type: 'success', text: `Paket "${saved.name}" berhasil diperbarui.` })
       } else {
         saved = await createPackage(payload)
         setForm(EMPTY_FORM)
-        setSuccessMessage(`Paket "${saved.name}" (${saved.queue_code}) berhasil ditambahkan.`)
+        onNotice?.({
+          scope: 'package',
+          type: 'success',
+          text: `Paket "${saved.name}" (${saved.queue_code}) berhasil ditambahkan.`,
+        })
       }
       await onSaved?.(saved)
     } catch (err) {
@@ -308,7 +314,7 @@ export default function PackageForm({
   }
 
   function toggleAddonSelection(addonId) {
-    setAddonNotice(null)
+    if (notice) onNotice?.(null)
     setCheckedAddonIds((prev) =>
       prev.includes(addonId) ? prev.filter((id) => id !== addonId) : [...prev, addonId],
     )
@@ -317,13 +323,13 @@ export default function PackageForm({
   async function handleSavePackageAddons() {
     if (!isEditing) return
     setSavingAddons(true)
-    setAddonNotice(null)
+    onNotice?.(null)
     try {
       await setPackageAddons(selectedPackage.id, checkedAddonIds)
-      setAddonNotice({ type: 'success', text: 'Daftar tambahan layanan paket berhasil disimpan.' })
+      onNotice?.({ scope: 'addons', type: 'success', text: 'Daftar tambahan layanan paket berhasil disimpan.' })
       await onSaved?.(selectedPackage)
     } catch (err) {
-      setAddonNotice({ type: 'error', text: err.message, requestId: err.requestId })
+      onNotice?.({ scope: 'addons', type: 'error', text: err.message, requestId: err.requestId })
     } finally {
       setSavingAddons(false)
     }
@@ -358,7 +364,7 @@ export default function PackageForm({
               {error.message}
             </Alert>
           )}
-          {successMessage && <Alert variant="success">{successMessage}</Alert>}
+          {notice?.scope === 'package' && <Alert variant="success">{notice.text}</Alert>}
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Input
@@ -409,7 +415,7 @@ export default function PackageForm({
               }
               type="number"
               min="0"
-              step="1000"
+              step="1"
               placeholder="110000"
               value={form.price}
               onChange={(event) => updateField('price', event.target.value)}
@@ -435,7 +441,7 @@ export default function PackageForm({
                   label="Tarif Tambah per Orang (Rp)"
                   type="number"
                   min="0"
-                  step="1000"
+                  step="1"
                   placeholder="30000"
                   value={form.extra_person_price}
                   onChange={(event) => updateField('extra_person_price', event.target.value)}
@@ -703,12 +709,12 @@ export default function PackageForm({
             description="Centang tambahan layanan yang boleh dipilih pelanggan pada paket ini."
           >
             <div className="space-y-4">
-              {addonNotice && (
+              {notice?.scope === 'addons' && (
                 <Alert
-                  variant={addonNotice.type === 'error' ? 'error' : 'success'}
-                  requestId={addonNotice.requestId}
+                  variant={notice.type === 'error' ? 'error' : 'success'}
+                  requestId={notice.type === 'error' ? notice.requestId : null}
                 >
-                  {addonNotice.text}
+                  {notice.text}
                 </Alert>
               )}
 

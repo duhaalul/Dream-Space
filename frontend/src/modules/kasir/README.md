@@ -12,9 +12,17 @@ FR-06, FR-07, FR-09, FR-10, FR-12, FR-14 · UC-13 s.d. UC-15, UC-17 s.d. UC-20.
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
-| `pages/CashierPage.jsx` | Kasir: Pelanggan Aktif · Rincian Tagihan · Pembayaran | Admin | TODO |
-| `pages/HistoryPage.jsx` | Riwayat + Koreksi Data Transaksi | Admin; Owner lihat | TODO |
-| `components/` | dibuat sesuai kebutuhan, mis. `ActiveVisitList`, `BillDetails`, `PaymentForm`, `CorrectionPanel` | | — |
+| `pages/CashierPage.jsx` | Kasir (`UIUX/PNG/05_Kasir_Admin.png`): 3 kolom + tombol "+ Pelanggan Baru (Bayar Awal)" | Admin | Selesai |
+| `components/ActiveVisitList.jsx` | kolom Pelanggan Aktif + pencarian nama/nomor antrean | Admin | Selesai |
+| `components/BillDetails.jsx` | kolom Rincian Tagihan: item aktif, total, sudah dibayar, sisa/lunas/kelebihan, riwayat pembayaran | Admin | Selesai |
+| `components/SessionAdjustments.jsx` | selama sesi foto: tambahan layanan (+/−) dan jumlah orang akhir | Admin | Selesai |
+| `components/PaymentPanel.jsx` | kolom Pembayaran: Tunai/Transfer/QRIS, kembalian, refund kelebihan bayar, Selesaikan & Cetak Nota | Admin | Selesai |
+| `cashier.js` | logika: label rincian, `canReceivePayment`, `finishBlocker`, peta error | — | Selesai |
+| `pages/HistoryPage.jsx` | Riwayat (`UIUX/PNG/06_…`): filter tanggal, 4 kartu statistik, daftar, panel koreksi (Admin) | Admin; Owner lihat | Selesai |
+| `components/HistoryList.jsx` | Daftar Transaksi Selesai & Dibatalkan + pencarian | Admin; Owner lihat | Selesai |
+| `components/TransactionDetailModal.jsx` | detail transaksi, cetak ulang nota, riwayat koreksi | Admin; Owner lihat | Selesai |
+| `components/CorrectionPanel.jsx` | Koreksi Data Transaksi: nama pelanggan, metode/referensi pembayaran + alasan | Admin | Selesai |
+| `components/AuditList.jsx` | daftar koreksi (nilai lama → baru, alasan, waktu) | Admin; Owner lihat | Selesai |
 
 Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
 - `Card`: tiga kolom Kasir;
@@ -63,6 +71,9 @@ Data penting dari `getCashierDetail`:
 - Pembayaran tidak bisa dihapus; salah input diperbaiki lewat koreksi. Koreksi transaksi yang sudah lunas wajib alasan. Transaksi batal hanya boleh dikoreksi nama/penerimaannya.
 - Nota hanya ada setelah Selesai; cetak ulang dari Riwayat.
 - `client_request_id = newRequestId()` sekali per pembayaran/refund; pakai ulang saat mencoba lagi.
+- Selama sesi: tambahan layanan disimpan dengan `setTransactionAddons` (alasan otomatis "Tambahan layanan selama sesi"), jumlah orang akhir dengan `updateVisitSelection` dari modul antrean (paket & latar tetap). Lalu bayar sisa, baru "Selesaikan & Cetak Nota" (mengirim jumlah orang & tambahan yang sama → tidak perlu alasan).
+- Reservasi yang belum datang: pembayaran otomatis bertipe **DP** (nontunai wajib referensi). Selain itu bertipe Pembayaran.
+- Data Kasir (pelanggan, rincian, katalog paket/tambahan) diperbarui otomatis tiap 15 detik.
 
 ## Error yang ditangani khusus
 | Kode | Tindakan di tampilan |
@@ -87,16 +98,16 @@ Data penting dari `getCashierDetail`:
 - **Memakai dari `paket`:** `getAddons()` dan `getPackages()` (`@/modules/paket/api`) untuk pilihan tambahan dan ganti paket.
 
 ## Checklist selesai
-- [ ] Kolom pelanggan aktif + pencarian, klik → `/kasir/:id`
-- [ ] Rincian tagihan (item, tambahan, total, sudah bayar, sisa)
-- [ ] Form pembayaran Tunai/Transfer/QRIS + kembalian
-- [ ] Konfirmasi akhir sesi (jumlah orang akhir + tambahan)
-- [ ] "Selesaikan & Cetak Nota" nonaktif selama ada sisa tagihan; nota terbuka setelah selesai
-- [ ] Refund kelebihan bayar
-- [ ] Riwayat + pencarian + cetak ulang nota
-- [ ] Panel koreksi (Admin) + riwayat koreksi (Admin & Owner)
-- [ ] Tombol bayar/simpan memakai `loading` (anti klik ganda)
-- [ ] `npm run build` dan `npm run lint` lulus
+- [x] Kolom pelanggan aktif + pencarian, klik → `/kasir/:id`
+- [x] Rincian tagihan (item, tambahan, total, sudah bayar, sisa)
+- [x] Form pembayaran Tunai/Transfer/QRIS + kembalian
+- [x] Konfirmasi akhir sesi (jumlah orang akhir + tambahan)
+- [x] "Selesaikan & Cetak Nota" nonaktif selama ada sisa tagihan; nota terbuka setelah selesai
+- [x] Refund kelebihan bayar
+- [x] Riwayat + pencarian + cetak ulang nota
+- [x] Panel koreksi (Admin) + riwayat koreksi (Admin & Owner)
+- [x] Tombol bayar/simpan memakai `loading` (anti klik ganda)
+- [x] `npm run build` dan `npm run lint` lulus
 - [ ] Semua langkah uji di bawah lulus
 
 ## Cara mengetes
@@ -107,3 +118,7 @@ Data penting dari `getCashierDetail`:
 5. Riwayat: koreksi metode bayar dengan alasan → riwayat koreksi bertambah. Login Owner → riwayat koreksi terlihat, tombol koreksi tidak ada.
 6. Cetak ulang nota dari Riwayat.
 7. Tekan Bayar dua kali dengan cepat → hanya 1 pembayaran tercatat.
+
+## Keterbatasan saat ini
+- Koreksi di Riwayat hanya untuk **nama pelanggan** dan **metode/referensi pembayaran** (nominal & waktu tetap). Koreksi nominal/harga rincian belum dibuat karena bisa membuat saldo transaksi selesai tidak pas (backend: `UNSETTLED_CORRECTION`).
+- Jumlah "Koreksi Data" dihitung dari audit tiap transaksi yang tampil (backend belum punya daftar audit global).
