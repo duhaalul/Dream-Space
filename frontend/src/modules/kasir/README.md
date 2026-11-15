@@ -12,9 +12,13 @@ FR-06, FR-07, FR-09, FR-10, FR-12, FR-14 · UC-13 s.d. UC-15, UC-17 s.d. UC-20.
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
-| `pages/CashierPage.jsx` | Kasir: Pelanggan Aktif · Rincian Tagihan · Pembayaran | Admin | TODO |
+| `pages/CashierPage.jsx` | Kasir (`UIUX/PNG/05_Kasir_Admin.png`): 3 kolom + tombol "+ Pelanggan Baru (Bayar Awal)" | Admin | Selesai |
+| `components/ActiveVisitList.jsx` | kolom Pelanggan Aktif + pencarian nama/nomor antrean | Admin | Selesai |
+| `components/BillDetails.jsx` | kolom Rincian Tagihan: item aktif, total, sudah dibayar, sisa/lunas/kelebihan, riwayat pembayaran | Admin | Selesai |
+| `components/SessionAdjustments.jsx` | selama sesi foto: tambahan layanan (+/−) dan jumlah orang akhir | Admin | Selesai |
+| `components/PaymentPanel.jsx` | kolom Pembayaran: Tunai/Transfer/QRIS, kembalian, refund kelebihan bayar, Selesaikan & Cetak Nota | Admin | Selesai |
+| `cashier.js` | logika: label rincian, `canReceivePayment`, `finishBlocker`, peta error | — | Selesai |
 | `pages/HistoryPage.jsx` | Riwayat + Koreksi Data Transaksi | Admin; Owner lihat | TODO |
-| `components/` | dibuat sesuai kebutuhan, mis. `ActiveVisitList`, `BillDetails`, `PaymentForm`, `CorrectionPanel` | | — |
 
 Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
 - `Card`: tiga kolom Kasir;
@@ -63,6 +67,9 @@ Data penting dari `getCashierDetail`:
 - Pembayaran tidak bisa dihapus; salah input diperbaiki lewat koreksi. Koreksi transaksi yang sudah lunas wajib alasan. Transaksi batal hanya boleh dikoreksi nama/penerimaannya.
 - Nota hanya ada setelah Selesai; cetak ulang dari Riwayat.
 - `client_request_id = newRequestId()` sekali per pembayaran/refund; pakai ulang saat mencoba lagi.
+- Selama sesi: tambahan layanan disimpan dengan `setTransactionAddons` (alasan otomatis "Tambahan layanan selama sesi"), jumlah orang akhir dengan `updateVisitSelection` dari modul antrean (paket & latar tetap). Lalu bayar sisa, baru "Selesaikan & Cetak Nota" (mengirim jumlah orang & tambahan yang sama → tidak perlu alasan).
+- Reservasi yang belum datang: pembayaran otomatis bertipe **DP** (nontunai wajib referensi). Selain itu bertipe Pembayaran.
+- Data Kasir (pelanggan, rincian, katalog paket/tambahan) diperbarui otomatis tiap 15 detik.
 
 ## Error yang ditangani khusus
 | Kode | Tindakan di tampilan |
@@ -87,15 +94,15 @@ Data penting dari `getCashierDetail`:
 - **Memakai dari `paket`:** `getAddons()` dan `getPackages()` (`@/modules/paket/api`) untuk pilihan tambahan dan ganti paket.
 
 ## Checklist selesai
-- [ ] Kolom pelanggan aktif + pencarian, klik → `/kasir/:id`
-- [ ] Rincian tagihan (item, tambahan, total, sudah bayar, sisa)
-- [ ] Form pembayaran Tunai/Transfer/QRIS + kembalian
-- [ ] Konfirmasi akhir sesi (jumlah orang akhir + tambahan)
-- [ ] "Selesaikan & Cetak Nota" nonaktif selama ada sisa tagihan; nota terbuka setelah selesai
-- [ ] Refund kelebihan bayar
+- [x] Kolom pelanggan aktif + pencarian, klik → `/kasir/:id`
+- [x] Rincian tagihan (item, tambahan, total, sudah bayar, sisa)
+- [x] Form pembayaran Tunai/Transfer/QRIS + kembalian
+- [x] Konfirmasi akhir sesi (jumlah orang akhir + tambahan)
+- [x] "Selesaikan & Cetak Nota" nonaktif selama ada sisa tagihan; nota terbuka setelah selesai
+- [x] Refund kelebihan bayar
 - [ ] Riwayat + pencarian + cetak ulang nota
 - [ ] Panel koreksi (Admin) + riwayat koreksi (Admin & Owner)
-- [ ] Tombol bayar/simpan memakai `loading` (anti klik ganda)
+- [x] Tombol bayar/simpan memakai `loading` (anti klik ganda)
 - [ ] `npm run build` dan `npm run lint` lulus
 - [ ] Semua langkah uji di bawah lulus
 

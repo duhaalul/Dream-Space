@@ -62,6 +62,23 @@ export const PAYMENT_TYPE_LABELS = {
   PEMBAYARAN: 'Pembayaran',
 }
 
+// transactions.payment_status → label + warna <Badge tone>.
+export const PAYMENT_STATUS_LABELS = {
+  BELUM_DIBAYAR: 'Belum Dibayar',
+  BELUM_LUNAS: 'Belum Lunas',
+  LUNAS: 'Lunas',
+  KELEBIHAN_BAYAR: 'Kelebihan Bayar',
+  TIDAK_ADA_TAGIHAN: 'Tanpa Tagihan',
+}
+
+export const PAYMENT_STATUS_TONES = {
+  BELUM_DIBAYAR: 'red',
+  BELUM_LUNAS: 'amber',
+  LUNAS: 'green',
+  KELEBIHAN_BAYAR: 'indigo',
+  TIDAK_ADA_TAGIHAN: 'gray',
+}
+
 export const PRICE_TYPE_LABELS = {
   PER_SESI: 'Per sesi',
   PER_ORANG: 'Per orang',
