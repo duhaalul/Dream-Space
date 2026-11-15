@@ -33,7 +33,8 @@ export default function CashMethodChart({ rows = [], netCash = 0, cancelledNetCa
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col items-center gap-5 sm:flex-row">
+      {/* Kartu ini sempit di layar laptop (lg–xl), jadi donat dan rincian ditumpuk ke bawah di sana. */}
+      <div className="flex flex-col items-center gap-5 sm:flex-row lg:flex-col 2xl:flex-row">
         <div className="relative h-44 w-44 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -71,11 +72,11 @@ export default function CashMethodChart({ rows = [], netCash = 0, cancelledNetCa
           </div>
         </div>
 
-        <div className="w-full flex-1 space-y-3">
+        <div className="w-full min-w-0 flex-1 space-y-3">
           {summary.map((item) => (
             <div
               key={item.key}
-              className="flex items-center justify-between rounded-2xl bg-slate-50 px-3.5 py-2.5"
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-slate-50 px-3.5 py-2.5"
             >
               <div className="flex items-center gap-2.5">
                 <span
@@ -85,7 +86,7 @@ export default function CashMethodChart({ rows = [], netCash = 0, cancelledNetCa
                 />
                 <span className="text-xs text-slate-600">{item.label}</span>
               </div>
-              <span className="text-sm font-bold text-slate-800">
+              <span className="text-sm font-bold whitespace-nowrap text-slate-800">
                 {formatRupiah(item.amount)}
               </span>
             </div>

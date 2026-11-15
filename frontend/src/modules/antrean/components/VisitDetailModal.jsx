@@ -9,7 +9,8 @@ export default function VisitDetailModal({ open, onClose }) {
         title="Detail, ubah, dan batalkan"
         items={[
           'Ambil data dengan getVisit(visitId); simpan visit.version.',
-          'Ubah nama panggilan, paket, latar, atau jumlah orang sebelum dipanggil: updateVisitSelection().',
+          'Ubah paket, latar, atau jumlah orang sebelum dipanggil: updateVisitSelection() (endpoint ini tidak mengubah nama).',
+          'Salah ketik nama panggilan: koreksi lewat addCorrection(transactionId, { version, reason, customer_name }) dari modul kasir.',
           'Batalkan sebelum foto dengan alasan: runVisitAction({ action: CANCEL }); uang tidak dikembalikan.',
           'Riwayat status dari events.',
         ]}

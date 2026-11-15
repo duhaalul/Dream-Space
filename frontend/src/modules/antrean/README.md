@@ -62,6 +62,7 @@ Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar ti
 - `client_request_id = newRequestId()` sekali per pengisian form; pakai ulang saat mencoba lagi.
 - Kirim `visit.version` terbaru di setiap tindakan.
 - Ubah paket/latar/jumlah orang hanya sebelum dipanggil. Kosongkan tambahan lama sebelum mengganti paket.
+- `updateVisitSelection` **tidak** mengubah nama. Salah ketik nama panggilan diperbaiki lewat koreksi: `addCorrection(transactionId, { version, reason, customer_name })` dari `@/modules/kasir/api` (catatan tim backend, `backend/docs/FRONTEND_INTEGRATION.md`).
 - **Tidak ada** tombol "Tutup Hari Kasir". Saat studio tutup, sisa antrean dibatalkan satu per satu dengan alasan.
 
 ## Error yang ditangani khusus
