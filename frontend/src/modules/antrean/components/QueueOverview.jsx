@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useAuth } from '@/modules/akun/useAuth'
 import RoomAvailabilityToggle from '@/modules/paket/components/RoomAvailabilityToggle'
-import { Alert } from '@/shared/components/ui'
-import { ROLES } from '@/shared/utils/constants'
+import { Alert, Button } from '@/shared/components/ui'
+import { ROLES, VISIT_ACTIONS } from '@/shared/utils/constants'
 import { formatDate, formatTime } from '@/shared/utils/format'
 import { appointmentDue, backgroundNames, buildBoard, customerTypeLabel, ticketFor, visitMeta } from '../queue'
 import { useQueueData } from '../useQueueData'
@@ -12,6 +13,7 @@ import { ActionFeedback, EmptyNote, QueueLoading, RefreshButton, Section } from 
 import PackageTiles from './PackageTiles'
 import VisitActionButtons from './VisitActionButtons'
 import VisitCard from './VisitCard'
+import VisitDetailModal from './VisitDetailModal'
 
 const ATTENTION_ORDER = { SEDANG_DILAYANI: 0, DIPANGGIL: 1, DILEWATI: 2 }
 
@@ -24,6 +26,7 @@ export default function QueueOverview() {
   const [, setSearchParams] = useSearchParams()
   const { data, error, reload } = useQueueData({ includePrevious: true })
   const actions = useVisitActions(reload)
+  const [detailId, setDetailId] = useState(null)
 
   if (!data) return <QueueLoading error={error} onRetry={reload} />
 
@@ -45,7 +48,15 @@ export default function QueueOverview() {
   const title = (visit) => `${visit.customer_name} (${customerTypeLabel(visit)})`
   const meta = (visit) =>
     [packages.get(visit.package_id)?.name ?? 'Paket belum dipilih', visitMeta(visit, backgrounds)].filter(Boolean).join(' · ')
-  const buttons = (visit) => isAdmin && <VisitActionButtons visit={visit} actions={actions} call={{ isFirst: false, blocked: null }} />
+  // Admin: tombol tindakan + Detail. Owner: Detail saja (hanya melihat).
+  const buttons = (visit) => (
+    <>
+      {isAdmin && <VisitActionButtons visit={visit} actions={actions} call={{ isFirst: false, blocked: null }} />}
+      <Button size="sm" variant="ghost" onClick={() => setDetailId(visit.id)}>
+        Detail
+      </Button>
+    </>
+  )
 
   return (
     <div className="space-y-6">
@@ -153,6 +164,20 @@ export default function QueueOverview() {
             ))}
           </div>
         </Section>
+      )}
+
+      {detailId && (
+        <VisitDetailModal
+          key={detailId}
+          visitId={detailId}
+          isAdmin={isAdmin}
+          onClose={() => setDetailId(null)}
+          onChanged={reload}
+          onCancelVisit={(visit) => {
+            setDetailId(null)
+            actions.ask(visit, VISIT_ACTIONS.CANCEL)
+          }}
+        />
       )}
     </div>
   )

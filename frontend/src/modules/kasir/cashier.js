@@ -1,6 +1,63 @@
 // Logika Kasir (tanpa komponen). Angka tagihan selalu dari backend (detail.balance),
 // frontend hanya menampilkan dan memeriksa isian sebelum dikirim.
+import { PAYMENT_METHOD_LABELS } from '@/shared/utils/constants'
 import { formatRupiah } from '@/shared/utils/format'
+
+// ---- Riwayat & koreksi -------------------------------------------------------
+
+// Kolom JSON audit bisa datang sebagai objek atau teks.
+const asObject = (value) => {
+  if (!value) return {}
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) ?? {}
+    } catch {
+      return {}
+    }
+  }
+  return value
+}
+
+export function corrections(auditRows = []) {
+  return auditRows.filter((row) => row.action === 'CORRECTION')
+}
+
+// Entri audit CORRECTION → daftar kalimat "Nama: Eko → Eka", "Pembayaran Rp150.000: QRIS → Tunai".
+export function correctionSummary(entry) {
+  const before = asObject(entry.old_values)
+  const after = asObject(entry.new_values)
+  const lines = []
+  if (after.customer_name) lines.push(`Nama: ${before.customer_name ?? '-'} → ${after.customer_name}`)
+  for (const payment of after.payments ?? []) {
+    const old = (before.payments ?? []).find((item) => item.id === payment.id) ?? {}
+    const parts = []
+    if (old.method !== payment.method) parts.push(`${PAYMENT_METHOD_LABELS[old.method] ?? old.method ?? '-'} → ${PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}`)
+    if ((old.reference ?? null) !== (payment.reference ?? null)) parts.push(`referensi ${old.reference ?? '-'} → ${payment.reference ?? '-'}`)
+    if (Number(old.amount) !== Number(payment.amount)) parts.push(`nominal ${formatRupiah(old.amount)} → ${formatRupiah(payment.amount)}`)
+    lines.push(`Pembayaran ${formatRupiah(payment.amount)}: ${parts.join(', ') || 'tanpa perubahan'}`)
+  }
+  for (const item of after.items ?? []) {
+    const old = (before.items ?? []).find((row) => row.id === item.id) ?? {}
+    lines.push(`Harga rincian: ${formatRupiah(old.unit_price)} → ${formatRupiah(item.unit_price)}`)
+  }
+  return lines.length ? lines : ['Koreksi data transaksi']
+}
+
+// Isi koreksi metode bayar satu pembayaran (nominal & waktu tetap).
+// Tunai butuh cash_received ≥ nominal; nontunai cash_received = null (backend: INVALID_CASH).
+export function paymentCorrection(payment, method, reference) {
+  const cash = method === 'TUNAI'
+  return {
+    id: payment.id,
+    method,
+    amount: Number(payment.amount),
+    cash_received: cash ? (payment.method === 'TUNAI' ? Number(payment.cash_received) : Number(payment.amount)) : null,
+    paid_at: String(payment.paid_at).slice(0, 19),
+    reference: cash ? null : reference.trim() || null,
+  }
+}
+
+// ---- Kasir --------------------------------------------------------------------
 
 export const TERMINAL = ['SELESAI', 'DIBATALKAN']
 

@@ -33,7 +33,10 @@ Admin juga punya tombol header "+ Reservasi WhatsApp" / "+ Datang Langsung (Walk
 | `components/PackageFields.jsx` | kolom Paket, Latar, Jumlah Orang + info Kapasitas Ruangan (dipakai ulang di modal ubah) | Admin | Selesai |
 | `components/EstimateBox.jsx` | kotak biru Estimasi Tagihan | Admin | Selesai |
 | `visitForm.js` | logika form: estimasi harga, batas orang, validasi, jam janji, peta error | — | Selesai |
-| `components/VisitDetailModal.jsx` | (modal) detail, ubah, batalkan kunjungan | Admin; Owner lihat | TODO |
+| `components/VisitDetailModal.jsx` | (modal, tombol "Detail" di Per Paket & Ringkasan) detail, tagihan, riwayat status; Admin: ubah/lengkapi paket, koreksi nama, batalkan | Admin; Owner lihat | Selesai |
+| `components/EditSelectionForm.jsx` | ubah paket/latar/jumlah orang + alasan (hanya Reservasi/Menunggu) | Admin | Selesai |
+| `components/RenameForm.jsx` | koreksi nama panggilan lewat `addCorrection` (tercatat di audit) | Admin | Selesai |
+| `components/VisitTimeline.jsx` | riwayat status dari `events` | Admin; Owner lihat | Selesai |
 
 ## Hak akses
 | Tindakan | Admin | Owner |
@@ -115,10 +118,10 @@ Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar ti
 - [x] Papan per paket: sedang foto, urutan menunggu, dilewati, reservasi belum datang
 - [x] Tombol mengikuti status (tabel di atas) + dialog alasan
 - [x] Form datang langsung dan reservasi (+ DP)
-- [ ] Modal detail: ubah dan batalkan
+- [x] Modal detail: ubah dan batalkan
 - [x] Owner hanya melihat (tanpa tab Pendaftaran dan tombol)
 - [x] Tombol simpan/aksi memakai `loading` (anti klik ganda)
-- [ ] `npm run build` dan `npm run lint` lulus
+- [x] `npm run build` dan `npm run lint` lulus
 - [ ] Semua langkah uji di bawah lulus
 
 ## Cara mengetes
@@ -130,3 +133,7 @@ Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar ti
 6. Buka Antrean di 2 browser, lakukan tindakan di satu browser → browser lain mendapat pesan data berubah.
 7. Login Owner → hanya melihat, tanpa tab Pendaftaran dan tombol.
 8. Tekan Simpan dua kali dengan cepat → hanya 1 kunjungan tercatat.
+
+## Keterbatasan saat ini
+- SRS menyebut "ubah jam janji" reservasi, tetapi backend belum punya endpoint untuk mengubah `appointment_at`. Untuk sementara: batalkan reservasi (alasan) lalu catat ulang.
+- Peringatan "kunjungan hari sebelumnya" di Ringkasan belum teruji dengan data nyata (backend tidak mengizinkan membuat kunjungan bertanggal lampau).

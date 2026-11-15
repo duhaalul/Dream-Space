@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useAuth } from '@/modules/akun/useAuth'
-import { Alert } from '@/shared/components/ui'
-import { ROLES } from '@/shared/utils/constants'
+import { Alert, Button } from '@/shared/components/ui'
+import { ROLES, VISIT_ACTIONS } from '@/shared/utils/constants'
 import { formatTime } from '@/shared/utils/format'
 import { appointmentDue, backgroundNames, buildBoard, customerTypeLabel, ticketFor, visitMeta } from '../queue'
 import { useQueueData } from '../useQueueData'
@@ -12,6 +13,7 @@ import PackageTiles from './PackageTiles'
 import RoomBanner from './RoomBanner'
 import VisitActionButtons from './VisitActionButtons'
 import VisitCard from './VisitCard'
+import VisitDetailModal from './VisitDetailModal'
 
 // Tab "Per Paket" di halaman Antrean (desain 03_Antrean_Owner_dan_Admin).
 // Admin: tombol tindakan sesuai status. Owner: hanya melihat.
@@ -21,6 +23,7 @@ export default function QueueBoard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data, error, reload } = useQueueData()
   const actions = useVisitActions(reload)
+  const [detailId, setDetailId] = useState(null)
 
   if (!data) return <QueueLoading error={error} onRetry={reload} />
 
@@ -32,7 +35,15 @@ export default function QueueBoard() {
   const now = `${data.today} ${nowWibTime()}`
   const callBlocked = !room.isOpen ? 'Ruangan sedang ditutup.' : room.inRoom ? 'Panggil aktif lagi setelah ruangan kosong.' : null
   const title = (visit) => `${visit.customer_name} (${customerTypeLabel(visit)})`
-  const buttons = (visit, call) => isAdmin && <VisitActionButtons visit={visit} actions={actions} call={call} />
+  // Admin: tombol tindakan + Detail. Owner: Detail saja (hanya melihat).
+  const buttons = (visit, call) => (
+    <>
+      {isAdmin && <VisitActionButtons visit={visit} actions={actions} call={call} />}
+      <Button size="sm" variant="ghost" onClick={() => setDetailId(visit.id)}>
+        Detail
+      </Button>
+    </>
+  )
 
   function selectPackage(pkg) {
     setSearchParams(
@@ -122,6 +133,20 @@ export default function QueueBoard() {
           <EmptyNote>Tidak ada pelanggan dilewati atau reservasi hari ini untuk paket ini.</EmptyNote>
         )}
       </Section>
+
+      {detailId && (
+        <VisitDetailModal
+          key={detailId}
+          visitId={detailId}
+          isAdmin={isAdmin}
+          onClose={() => setDetailId(null)}
+          onChanged={reload}
+          onCancelVisit={(visit) => {
+            setDetailId(null)
+            actions.ask(visit, VISIT_ACTIONS.CANCEL)
+          }}
+        />
+      )}
     </div>
   )
 }
