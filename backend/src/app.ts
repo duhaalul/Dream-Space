@@ -14,7 +14,7 @@ import { reports } from './reports.js';
 export const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({ origin: config.FRONTEND_ORIGIN, methods: ['GET','POST','PUT','PATCH'],
+app.use(cors({ origin: config.FRONTEND_ORIGIN, methods: ['GET','POST','PUT','PATCH','DELETE'],
   allowedHeaders: ['Content-Type','Authorization'], exposedHeaders: ['X-Request-Id','Content-Disposition'] }));
 app.use(express.json({ limit: '128kb' }));
 app.use((_req,res,next) => { res.setHeader('X-Request-Id',randomUUID()); res.setHeader('Cache-Control','no-store'); next(); });

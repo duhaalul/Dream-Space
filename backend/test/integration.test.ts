@@ -1,7 +1,7 @@
 import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import bcrypt from 'bcrypt';
 import request from 'supertest';
@@ -12,6 +12,7 @@ import { config } from '../src/config.js';
 import { pool, read, run, rows } from '../src/db.js';
 import { wib, today } from '../src/core.js';
 import { verifyFrontendContract } from './frontend-contract.js';
+import { closeStaleVisits } from '../src/operations.js';
 
 const numeric = z.number();
 const viewSchema = z.object({
@@ -58,8 +59,12 @@ before(async () => {
       await db.query('SET FOREIGN_KEY_CHECKS=1');
     }
     await db.query("SET time_zone='+07:00'");
-    const sql = await readFile(new URL('../migrations/001_initial.sql',import.meta.url),'utf8');
-    for (const statement of sql.split(';').map(s => s.trim()).filter(Boolean)) await db.query(statement);
+    // Semua migrasi berurutan, sama seperti src/migrate.ts.
+    const dir = new URL('../migrations/',import.meta.url);
+    for (const file of (await readdir(dir)).filter(f => /^\d{3}_[a-z0-9_]+\.sql$/.test(f)).sort()) {
+      const sql = await readFile(new URL(file,dir),'utf8');
+      for (const statement of sql.split(';').map(s => s.trim()).filter(Boolean)) await db.query(statement);
+    }
     const hash = await bcrypt.hash(initial,12);
     await run(db,'INSERT INTO users(name,username,password_hash,role) VALUES(?,?,?,?),(?,?,?,?)',
       ['Admin','admin',hash,'ADMIN','Owner','owner',hash,'OWNER']);
@@ -130,7 +135,8 @@ test('foto wajib lunas di awal; tambahan saat sesi dibayar di akhir; finish gaga
   await request(app).post(`/api/visits/${v.visit.id}/finish`).set(auth()).send(finish).expect(409);
   const after = await view(v.visit.id); assert.equal(after.transaction.total,100000); assert.equal(after.visit.version,v.visit.version);
   await request(app).post(`/api/visits/${v.visit.id}/actions`).set(auth()).send({ version: v.visit.version,action: 'CANCEL',reason: 'Tidak jadi' }).expect(409);
-  await request(app).get(`/api/transactions/${v.transaction.id}/receipt.pdf`).set(auth()).expect(409);
+  // Nota tersedia sejak lunas (sebelum sesi selesai).
+  await request(app).get(`/api/transactions/${v.transaction.id}/receipt.pdf`).set(auth()).expect(200);
   v = viewSchema.parse((await request(app).post(`/api/visits/${v.visit.id}/finish`).set(auth()).send({ ...finish,
     payment: { client_request_id: randomUUID(),payment_type: 'PEMBAYARAN',method: 'TUNAI',amount: 50000 } }).expect(200)).body);
   assert.equal(v.visit.status,'SELESAI'); assert.equal(v.transaction.total,120000); assert.equal(v.balance.net,120000);
@@ -181,7 +187,9 @@ test('snapshot tarif lama, perubahan orang dan skip kembali', async () => {
 test('laporan, PDF dan XLSX memakai sumber data transaksi', async () => {
   const dashboard = await request(app).get('/api/dashboard').set(auth(owner)).expect(200);
   assert.equal(z.object({ sales: z.number() }).parse(dashboard.body).sales,120000);
-  for (const code of ['sales','packages','cash','visits']) {
+  // L-04 rekap kunjungan dihapus (kebutuhannya dipenuhi menu Riwayat).
+  await request(app).get('/api/reports/visits').set(auth(owner)).expect(422);
+  for (const code of ['sales','packages','cash']) {
     const response = await request(app).get(`/api/reports/${code}`).set(auth(owner)).expect(200);
     assert.ok(z.object({ rows: z.array(z.record(z.string(),z.union([z.string(),z.number(),z.null()]))) }).parse(response.body).rows.length);
     const pdf = await request(app).get(`/api/reports/${code}?format=pdf`).set(auth(owner)).expect(200);
@@ -245,7 +253,7 @@ test('tanggal uang masuk berbeda dengan tanggal layanan; DP nontunai wajib refer
   assert.equal(data.rows.reduce((sum,r) => sum+r.cash_in,0),25000);
   await action(v,'CANCEL');
 });
-test('pembayaran sebagian belum boleh mulai; addon tercatat saat berjalan boleh terutang hingga akhir', async () => {
+test('pembayaran sebagian belum boleh mulai; setelah lunas terkunci; FINISH menyelesaikan sesi', async () => {
   let v = await action(await register(),'CALL');
   async function pay(amount: number): Promise<View> {
     return viewSchema.parse((await request(app).post(`/api/transactions/${v.transaction.id}/payments`).set(auth())
@@ -254,16 +262,172 @@ test('pembayaran sebagian belum boleh mulai; addon tercatat saat berjalan boleh 
   v = await pay(50000);
   await request(app).post(`/api/visits/${v.visit.id}/actions`).set(auth()).send({ version: v.visit.version,action: 'START' }).expect(409);
   v = await pay(150000); v = await action(v,'START');
-  v = viewSchema.parse((await request(app).put(`/api/transactions/${v.transaction.id}/addons`).set(auth()).send({
-    version: v.transaction.version,addons: [{ addon_id: addon,qty: 1 }],reason: 'Tambah cetak saat sesi berlangsung' }).expect(200)).body);
-  assert.equal(v.visit.status,'SEDANG_DILAYANI'); assert.equal(v.transaction.payment_status,'BELUM_LUNAS'); assert.equal(v.balance.due,10000);
-  const finish = { version: v.visit.version,transaction_version: v.transaction.version,persons: 2,addons: [{ addon_id: addon,qty: 1 }] };
-  await request(app).post(`/api/visits/${v.visit.id}/finish`).set(auth()).send(finish).expect(409);
-  v = viewSchema.parse((await request(app).post(`/api/visits/${v.visit.id}/finish`).set(auth()).send({ ...finish,
-    payment: { client_request_id: randomUUID(),payment_type: 'PEMBAYARAN',method: 'TRANSFER',amount: 10000 } }).expect(200)).body);
-  assert.equal(v.visit.status,'SELESAI'); assert.equal(v.balance.net,210000);
+  // Aturan studio: setelah lunas paket/tambahan tidak boleh diubah.
+  const locked = await request(app).put(`/api/transactions/${v.transaction.id}/addons`).set(auth()).send({
+    version: v.transaction.version,addons: [{ addon_id: addon,qty: 1 }],reason: 'Tambah cetak saat sesi berlangsung' }).expect(409);
+  assert.equal(z.object({ error: z.object({ code: z.string() }) }).parse(locked.body).error.code,'PAID_LOCKED');
+  await request(app).put(`/api/visits/${v.visit.id}/selection`).set(auth()).send({ version: v.visit.version,
+    package_id: pkg,persons: 3,reason: 'Tambah orang' }).expect(409);
+  v = await action(v,'FINISH');
+  assert.equal(v.visit.status,'SELESAI'); assert.equal(v.balance.net,200000); assert.equal(v.transaction.payment_status,'LUNAS');
+  await request(app).post(`/api/visits/${v.visit.id}/actions`).set(auth()).send({ version: v.visit.version,action: 'FINISH' }).expect(409);
+});
+test('walk-in: daftar + tambahan + bayar lunas atomik, idempoten, penjualan diakui saat lunas', async () => {
+  const salesToday = async () => z.object({ sales: z.number() }).parse((await request(app).get('/api/dashboard').set(auth(owner)).expect(200)).body).sales;
+  const salesBefore = await salesToday();
+  const base = { customer_name: 'Walk-in Lunas',package_id: pkg,persons: 2,addons: [{ addon_id: addon,qty: 2 }] };
+  // Kurang bayar → seluruh pendaftaran dibatalkan.
+  const short = await request(app).post('/api/visits/walk-in').set(auth()).send({ ...base,client_request_id: randomUUID(),
+    payment: { client_request_id: randomUUID(),method: 'TRANSFER',amount: 1000 } }).expect(422);
+  assert.equal(z.object({ error: z.object({ code: z.string() }) }).parse(short.body).error.code,'PAYMENT_NOT_SETTLED');
+  await request(app).post('/api/visits/walk-in').set(auth()).send({ ...base,client_request_id: randomUUID() }).expect(422);
+  await request(app).post('/api/visits/walk-in').set(auth(owner)).send({ ...base,client_request_id: randomUUID() }).expect(403);
+  const listed = z.array(z.object({ id: numeric })).parse((await request(app).get('/api/visits?search=Walk-in%20Lunas').set(auth()).expect(200)).body);
+  assert.equal(listed.length,0,'Pendaftaran kurang bayar tidak boleh tersimpan');
+  // Tunai lebih → lunas + kembalian; permintaan ganda = satu kunjungan.
+  const input = { ...base,client_request_id: randomUUID(),payment: { client_request_id: randomUUID(),method: 'TUNAI',amount: 500000 } };
+  const pair = await Promise.all([1,2].map(() => request(app).post('/api/visits/walk-in').set(auth()).send(input)));
+  pair.forEach(p => assert.equal(p.status,201,JSON.stringify(p.body)));
+  const v = viewSchema.parse(pair[0]!.body); assert.equal(viewSchema.parse(pair[1]!.body).visit.id,v.visit.id);
+  assert.equal(v.visit.status,'MENUNGGU'); assert.equal(v.transaction.payment_status,'LUNAS');
+  assert.ok(v.items.some(i => i.item_type === 'TAMBAHAN' && i.qty === 2 && i.is_active));
+  assert.equal(v.balance.net,v.transaction.total); assert.equal(v.payments.length,1);
+  assert.equal(v.payments[0]?.change_amount,500000-v.transaction.total);
+  await request(app).post('/api/visits/walk-in').set(auth()).send({ ...input,customer_name: 'Berbeda' }).expect(409);
+  // Nota langsung tersedia; penjualan sudah bertambah sebelum sesi selesai.
+  await request(app).get(`/api/transactions/${v.transaction.id}/receipt.pdf`).set(auth()).expect(200);
+  assert.equal(await salesToday(),salesBefore+v.transaction.total);
+  // Batal setelah bayar: uang ditahan, tidak lagi dihitung penjualan.
+  await action(v,'CANCEL');
+  assert.equal(await salesToday(),salesBefore);
+});
+test('timer sesi: durasi paket + tambah waktu disimpan saat mulai foto', async () => {
+  await request(app).post('/api/packages').set(auth(owner)).send({ name: 'Durasi Nol',queue_code: 'DN',price_type: 'PER_SESI',
+    price: 1000,duration_minutes: 0 }).expect(422);
+  const timed = z.object({ id: numeric }).parse((await request(app).post('/api/packages').set(auth(owner)).send({ name: 'Berdurasi',
+    queue_code: 'TM',price_type: 'PER_SESI',price: 50000,duration_minutes: 15 }).expect(201)).body).id;
+  const extra = z.object({ id: numeric }).parse((await request(app).post('/api/addons').set(auth(owner))
+    .send({ name: 'Tambah waktu',price: 20000,unit: '5 menit',extra_minutes: 5 }).expect(201)).body).id;
+  await request(app).put(`/api/packages/${timed}/addons`).set(auth(owner)).send({ addon_ids: [extra,addon] }).expect(200);
+  const catalog = z.object({ packages: z.array(z.object({ id: numeric,duration_minutes: numeric.nullable() })) })
+    .parse((await request(app).get('/api/packages').set(auth()).expect(200)).body);
+  assert.equal(catalog.packages.find(p => p.id === timed)?.duration_minutes,15);
+  const addons = z.array(z.object({ id: numeric,extra_minutes: numeric.nullable() })).parse((await request(app).get('/api/addons').set(auth()).expect(200)).body);
+  assert.equal(addons.find(a => a.id === extra)?.extra_minutes,5); assert.equal(addons.find(a => a.id === addon)?.extra_minutes,null);
+  const created = await request(app).post('/api/visits/walk-in').set(auth()).send({ client_request_id: randomUUID(),customer_name: 'Pelanggan Timer',
+    package_id: timed,persons: 1,addons: [{ addon_id: extra,qty: 2 },{ addon_id: addon,qty: 1 }],
+    payment: { client_request_id: randomUUID(),method: 'QRIS',amount: 100000 } }).expect(201);
+  let v = await action(viewSchema.parse(created.body),'CALL');
+  const started = await request(app).post(`/api/visits/${v.visit.id}/actions`).set(auth()).send({ version: v.visit.version,action: 'START' }).expect(200);
+  // 15 menit paket + 2 × 5 menit tambah waktu; tambahan cetak tidak menambah waktu.
+  assert.equal(z.object({ visit: z.object({ session_minutes: numeric }) }).parse(started.body).visit.session_minutes,25);
+  const room = z.array(z.object({ package_id: numeric,session_minutes: numeric.nullable(),started_at: z.string().nullable(),
+    queue_code_snapshot: z.string().nullable() })).parse((await request(app).get('/api/queue/rooms').set(auth()).expect(200)).body)
+    .find(r => r.package_id === timed);
+  assert.equal(room?.session_minutes,25); assert.ok(room?.started_at); assert.equal(room?.queue_code_snapshot,'TM');
+  v = await action(viewSchema.parse(started.body),'FINISH');
+  assert.equal(v.visit.status,'SELESAI');
+  // Paket tanpa durasi: tanpa timer.
+  const plain = await action(await action(await register(cheap),'CALL'),'CANCEL');
+  assert.equal(plain.visit.status,'DIBATALKAN');
+});
+test('kunjungan hari sebelumnya yang lupa ditutup ditutup otomatis', async () => {
+  const walkIn = async (name: string) => viewSchema.parse((await request(app).post('/api/visits/walk-in').set(auth()).send({
+    client_request_id: randomUUID(),customer_name: name,package_id: cheap,persons: 1,
+    payment: { client_request_id: randomUUID(),method: 'TUNAI',amount: 60000 } }).expect(201)).body);
+  const started = await action(await action(await walkIn('Lupa Selesai'),'CALL'),'START');
+  const waiting = await walkIn('Lupa Batal');
+  const fresh = await walkIn('Hari Ini');
+  await read(db => run(db,'UPDATE visits SET service_date=DATE_SUB(service_date,INTERVAL 1 DAY) WHERE id IN (?,?)',[started.visit.id,waiting.visit.id]));
+  const salesBefore = z.object({ sales: numeric }).parse((await request(app).get(`/api/dashboard?period=custom&from=${today()}&to=${today()}`).set(auth(owner)).expect(200)).body).sales;
+  assert.deepEqual(await closeStaleVisits(),{ cancelled: 1,finished: 1 });
+  assert.deepEqual(await closeStaleVisits(),{ cancelled: 0,finished: 0 });
+  const done = await view(started.visit.id); const gone = await view(waiting.visit.id);
+  assert.equal(done.visit.status,'SELESAI'); assert.equal(gone.visit.status,'DIBATALKAN');
+  assert.equal((await view(fresh.visit.id)).visit.status,'MENUNGGU');
+  const reasonOf = z.object({ visit: z.object({ cancel_reason: z.string().nullable() }) });
+  assert.match(reasonOf.parse((await request(app).get(`/api/visits/${waiting.visit.id}`).set(auth()).expect(200)).body).visit.cancel_reason ?? '',/^Otomatis/);
+  // Uang yang dibatalkan otomatis ditahan (tidak dikembalikan) dan tidak lagi dihitung penjualan.
+  assert.equal(gone.balance.net,60000); assert.equal(gone.balance.refunded,0);
+  const salesAfter = z.object({ sales: numeric }).parse((await request(app).get(`/api/dashboard?period=custom&from=${today()}&to=${today()}`).set(auth(owner)).expect(200)).body).sales;
+  assert.equal(salesAfter,salesBefore-60000);
+  const events = await read(db => rows<{ event_type: string }>(db,'SELECT event_type FROM visit_events WHERE visit_id IN (?,?) ORDER BY id',[started.visit.id,waiting.visit.id]));
+  assert.ok(events.some(e => e.event_type === 'AUTO_FINISH')); assert.ok(events.some(e => e.event_type === 'AUTO_CANCEL'));
+  await action(fresh,'CANCEL');
+});
+test('Kelola Paket: paket + latar + tambahan disimpan sekaligus dan atomik', async () => {
+  const base = { name: 'Paket Popup',queue_code: 'PP',price_type: 'PER_SESI',price: 90000,max_persons: 6,duration_minutes: 20 };
+  const errorOf = (body: unknown) => z.object({ error: z.object({ code: z.string(),details: z.array(z.object({ path: z.array(z.union([z.string(),numeric])) })).optional() }) }).parse(body).error;
+  await request(app).post('/api/packages/setup').set(auth()).send({ package: base }).expect(403);
+  // Nama latar kembar → ditolak, tidak ada yang tersimpan.
+  const twin = await request(app).post('/api/packages/setup').set(auth(owner)).send({ package: base,
+    backgrounds: [{ name: 'Putih' },{ name: 'putih' }],addon_ids: [addon] }).expect(422);
+  assert.deepEqual(errorOf(twin.body).details?.[0]?.path,['backgrounds',1,'name']);
+  const catalogSchema = z.object({ packages: z.array(z.object({ id: numeric,queue_code: z.string(),price: numeric,duration_minutes: numeric.nullable() })),
+    backgrounds: z.array(z.object({ id: numeric,package_id: numeric,name: z.string(),max_persons: numeric.nullable(),is_active: numeric })),
+    allowed_addons: z.array(z.object({ package_id: numeric,addon_id: numeric })) });
+  const catalog = async () => catalogSchema.parse((await request(app).get('/api/packages').set(auth(owner)).expect(200)).body);
+  assert.ok(!(await catalog()).packages.some(p => p.queue_code === 'PP'));
+  // Buat sekaligus.
+  const created = z.object({ id: numeric }).parse((await request(app).post('/api/packages/setup').set(auth(owner)).send({ package: base,
+    backgrounds: [{ name: 'Putih',max_persons: 6 },{ name: 'Abu',max_persons: 4 }],addon_ids: [addon] }).expect(201)).body).id;
+  let now = await catalog();
+  assert.equal(now.packages.find(p => p.id === created)?.duration_minutes,20);
+  const backgrounds = now.backgrounds.filter(b => b.package_id === created);
+  assert.deepEqual(backgrounds.map(b => b.name).sort(),['Abu','Putih']);
+  assert.deepEqual(now.allowed_addons.filter(a => a.package_id === created).map(a => a.addon_id),[addon]);
+  const white = backgrounds.find(b => b.name === 'Putih')!; const grey = backgrounds.find(b => b.name === 'Abu')!;
+  // Ubah sekaligus: harga, latar lama diubah/dinonaktifkan, latar baru, tambahan dikosongkan.
+  await request(app).put(`/api/packages/${created}/setup`).set(auth(owner)).send({ package: { ...base,price: 95000 },
+    backgrounds: [{ id: white.id,name: 'Putih Bersih',max_persons: 6 },{ id: grey.id,name: 'Abu',max_persons: 4,is_active: false },{ name: 'Hitam' }],
+    addon_ids: [] }).expect(200);
+  now = await catalog();
+  assert.equal(now.packages.find(p => p.id === created)?.price,95000);
+  assert.deepEqual(now.backgrounds.filter(b => b.package_id === created).map(b => `${b.name}:${b.is_active}`).sort(),['Abu:0','Hitam:1','Putih Bersih:1']);
+  assert.equal(now.allowed_addons.filter(a => a.package_id === created).length,0);
+  // Gagal di tengah (latar milik paket lain) → seluruh perubahan dibatalkan.
+  const foreign = now.backgrounds.find(b => b.package_id !== created)!;
+  const mismatch = await request(app).put(`/api/packages/${created}/setup`).set(auth(owner)).send({ package: { ...base,price: 1 },
+    backgrounds: [{ name: 'Baru Gagal' },{ id: foreign.id,name: foreign.name }],addon_ids: [addon] }).expect(422);
+  assert.equal(errorOf(mismatch.body).code,'BACKGROUND_MISMATCH');
+  now = await catalog();
+  assert.equal(now.packages.find(p => p.id === created)?.price,95000);
+  assert.ok(!now.backgrounds.some(b => b.name === 'Baru Gagal'));
+  assert.equal(now.allowed_addons.filter(a => a.package_id === created).length,0);
+  // Kode antrean kembar → 409, paket baru tidak tercipta.
+  await request(app).post('/api/packages/setup').set(auth(owner)).send({ package: { ...base,name: 'Paket Kembar' },backgrounds: [{ name: 'X' }] }).expect(409);
+  assert.ok(!(await catalog()).backgrounds.some(b => b.name === 'X'));
 });
 test('kontrak HTTP memakai modul API frontend asli', verifyFrontendContract);
+test('hapus tambahan: belum dipakai dihapus permanen, sudah dipakai diarsipkan', async () => {
+  const create = async (name: string) => z.object({ id: numeric }).parse((await request(app).post('/api/addons').set(auth(owner))
+    .send({ name,price: 5000,unit: 'pcs' }).expect(201)).body).id;
+  const unused = await create('Belum Dipakai'); const used = await create('Sudah Dipakai');
+  await request(app).put(`/api/packages/${pkg}/addons`).set(auth(owner)).send({ addon_ids: [addon,unused,used] }).expect(200);
+  const sold = viewSchema.parse((await request(app).post('/api/visits/walk-in').set(auth()).send({ client_request_id: randomUUID(),
+    customer_name: 'Pakai Tambahan',package_id: pkg,persons: 1,addons: [{ addon_id: used,qty: 1 }],
+    payment: { client_request_id: randomUUID(),method: 'TUNAI',amount: 1000000 } }).expect(201)).body);
+  await request(app).delete(`/api/addons/${used}`).set(auth()).expect(403);
+  // Masih tercentang di paket → ditolak dengan nama paketnya, tidak ada yang berubah.
+  const blocked = z.object({ error: z.object({ code: z.string(),message: z.string() }) })
+    .parse((await request(app).delete(`/api/addons/${unused}`).set(auth(owner)).expect(409)).body).error;
+  assert.equal(blocked.code,'ADDON_IN_USE'); assert.match(blocked.message,/Reguler/);
+  assert.ok(z.array(z.object({ id: numeric })).parse((await request(app).get('/api/addons').set(auth()).expect(200)).body).some(a => a.id === unused));
+  await request(app).put(`/api/packages/${pkg}/addons`).set(auth(owner)).send({ addon_ids: [addon] }).expect(200);
+  assert.deepEqual((await request(app).delete(`/api/addons/${unused}`).set(auth(owner)).expect(200)).body,{ id: unused,archived: false });
+  assert.deepEqual((await request(app).delete(`/api/addons/${used}`).set(auth(owner)).expect(200)).body,{ id: used,archived: true });
+  const list = z.array(z.object({ id: numeric,is_active: numeric })).parse((await request(app).get('/api/addons').set(auth()).expect(200)).body);
+  assert.ok(!list.some(a => a.id === unused)); assert.equal(list.find(a => a.id === used)?.is_active,0);
+  const links = z.object({ allowed_addons: z.array(z.object({ package_id: numeric,addon_id: numeric })) })
+    .parse((await request(app).get('/api/packages').set(auth(owner)).expect(200)).body).allowed_addons;
+  assert.ok(!links.some(l => l.addon_id === used || l.addon_id === unused)); assert.ok(links.some(l => l.addon_id === addon));
+  // Riwayat lama tetap utuh; tambahan terhapus tidak bisa dipilih lagi.
+  assert.ok((await view(sold.visit.id)).items.some(i => i.item_type === 'TAMBAHAN' && i.is_active));
+  await request(app).post('/api/visits/walk-in').set(auth()).send({ client_request_id: randomUUID(),customer_name: 'Tambahan Terhapus',
+    package_id: pkg,persons: 1,addons: [{ addon_id: used,qty: 1 }],payment: { client_request_id: randomUUID(),method: 'TUNAI',amount: 1000000 } }).expect(404);
+  await request(app).delete(`/api/addons/${unused}`).set(auth(owner)).expect(404);
+  await action(sold,'CANCEL');
+});
 test('reset password mencabut semua sesi, idle 30 menit ditolak', async () => {
   const second = await login('admin',permanent);
   await request(app).post('/api/auth/reset-admin-password').set(auth(owner)).send({ temporary_password: initial }).expect(200);

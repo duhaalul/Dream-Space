@@ -18,6 +18,7 @@ export interface Sale {
   price_snapshot: number | null; included_persons_snapshot: number | null; extra_person_price_snapshot: number | null;
   background_snapshot: string | null; subtotal: number; total: number; payment_status: string;
   refund_status: string; version: number; completed_at: string | null; cancelled_at: string | null;
+  paid_off_at: string | null;
 }
 export interface Item { id: number; item_type: string; addon_id: number | null; description: string;
   qty: number; unit_snapshot: string; unit_price: number; amount: number; is_active: number }
@@ -42,6 +43,10 @@ function checkVersion(actual: number, expected: number): void {
 function active(visit: Visit): void {
   ensure(!['SELESAI','DIBATALKAN'].includes(visit.status), 'TERMINAL_VISIT', 'Kunjungan sudah berakhir');
 }
+// Aturan studio: setelah lunas, paket/latar/jumlah orang/tambahan tidak boleh diubah (nanti lewat koreksi).
+function lockedWhenPaid(sale: Sale): void {
+  ensure(sale.payment_status !== 'LUNAS', 'PAID_LOCKED', 'Transaksi sudah lunas; paket dan tambahan tidak dapat diubah');
+}
 export async function balance(db: Db, transactionId: number): Promise<{ paid: number; refunded: number; net: number }> {
   const paid = Number((await one<{ value: number }>(db, 'SELECT COALESCE(SUM(amount),0) AS value FROM payments WHERE transaction_id=?', [transactionId])).value);
   const refunded = Number((await one<{ value: number }>(db, 'SELECT COALESCE(SUM(amount),0) AS value FROM refunds WHERE transaction_id=?', [transactionId])).value);
@@ -54,8 +59,11 @@ async function refresh(db: Db, transactionId: number): Promise<void> {
     : sale.price_type_snapshot === null ? (b.net > 0 ? 'BELUM_LUNAS' : 'BELUM_DIBAYAR')
     : b.net > sale.total ? 'KELEBIHAN_BAYAR' : b.net === sale.total ? (sale.total === 0 ? 'TIDAK_ADA_TAGIHAN' : 'LUNAS')
     : b.net === 0 ? 'BELUM_DIBAYAR' : 'BELUM_LUNAS';
-  await run(db, 'UPDATE transactions SET payment_status=?,refund_status=?,version=version+1 WHERE id=?',
-    [paymentStatus,b.refunded === 0 ? 'BELUM_ADA' : b.refunded === b.paid ? 'PENUH' : 'SEBAGIAN',transactionId]);
+  // paid_off_at: waktu transaksi pertama kali lunas (dasar laporan penjualan & nota). Transaksi batal tidak diisi.
+  const settled = !sale.cancelled_at && sale.price_type_snapshot !== null && ['LUNAS','TIDAK_ADA_TAGIHAN'].includes(paymentStatus);
+  await run(db, `UPDATE transactions SET payment_status=?,refund_status=?,
+    paid_off_at=CASE WHEN ? AND paid_off_at IS NULL THEN NOW(3) ELSE paid_off_at END,version=version+1 WHERE id=?`,
+    [paymentStatus,b.refunded === 0 ? 'BELUM_ADA' : b.refunded === b.paid ? 'PENUH' : 'SEBAGIAN',settled,transactionId]);
 }
 async function totalItems(db: Db, transactionId: number): Promise<void> {
   const total = Number((await one<{ total: number }>(db,
@@ -209,7 +217,8 @@ operations.get('/visits', async (req, res) => {
     v.queue_entered_at,v.id LIMIT 100 OFFSET ${100*(q.page-1)}`, [from,to,`%${q.search}%`,`%${q.search}%`])));
 });
 operations.get('/queue/rooms', async (_req,res) => res.json(await read(db => rows(db,`SELECT p.id AS package_id,p.name,p.is_open,p.closed_reason,
-  v.id AS active_visit_id,v.customer_name,v.status,v.service_date FROM packages p LEFT JOIN visits v ON v.package_id=p.id
+  v.id AS active_visit_id,v.customer_name,v.status,v.service_date,v.queue_code_snapshot,v.queue_number,v.started_at,v.session_minutes
+  FROM packages p LEFT JOIN visits v ON v.package_id=p.id
   AND v.status IN ('DIPANGGIL','SEDANG_DILAYANI') ORDER BY p.id`))));
 operations.get('/visits/:id', async (req, res) => res.json(await read(db => detail(db,id.parse(Number(req.params['id']))))));
 operations.get('/transactions/:id/audit', async (req, res) => {
@@ -221,6 +230,49 @@ operations.get('/transactions/:id/audit', async (req, res) => {
   }));
 });
 operations.use(role('ADMIN'));
+interface Registration {
+  client_request_id: string; customer_name: string; customer_type: 'WALK_IN' | 'RESERVASI'; appointment_at: string | null;
+  package_id: number | null; background_id: number | null; persons: number | null; note: string | null;
+}
+// Mencatat kunjungan + transaksinya (+ snapshot paket bila dipilih). Dipakai POST /visits dan POST /visits/walk-in.
+async function insertVisit(db: Db, actor: Actor, input: Registration, hash: string): Promise<{ visit: Visit; sale: Sale }> {
+  const reservation = input.customer_type === 'RESERVASI';
+  ensure(reservation ? input.appointment_at !== null : input.appointment_at === null,
+    'APPOINTMENT_INVALID', 'Reservasi wajib memiliki jam janji; walk-in tidak memakai jam janji', 422);
+  ensure(reservation || (input.package_id !== null && input.persons !== null), 'PACKAGE_REQUIRED', 'Walk-in wajib memilih paket dan jumlah orang', 422);
+  ensure(input.package_id !== null || (input.background_id === null && input.persons === null), 'PACKAGE_REQUIRED', 'Latar/jumlah orang memerlukan paket', 422);
+  ensure(input.package_id === null || input.persons !== null, 'PERSONS_REQUIRED', 'Jumlah orang wajib jika paket dipilih', 422);
+  const serviceDate = reservation ? input.appointment_at!.slice(0,10) : today();
+  ensure(serviceDate >= today(), 'PAST_APPOINTMENT', 'Reservasi baru tidak boleh untuk tanggal yang sudah lewat', 422);
+  const selection = input.package_id !== null && input.persons !== null
+    ? await validateSelection(db,input.package_id,input.background_id,input.persons) : null;
+  const queue = !reservation && selection ? await nextNumber(db,selection.pkg.id,serviceDate) : null;
+  const inserted = await run(db, `INSERT INTO visits(customer_name,customer_type,appointment_at,service_date,package_id,background_id,
+    persons,queue_number,queue_entered_at,queue_code_snapshot,status,note,client_request_id,request_hash,created_by)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  [input.customer_name,input.customer_type,input.appointment_at,serviceDate,input.package_id,input.background_id,input.persons,
+    queue,queue !== null ? wib() : null,queue !== null ? selection!.pkg.queue_code : null,reservation ? 'RESERVASI' : 'MENUNGGU',
+    input.note,input.client_request_id,hash,actor.id]);
+  await run(db, 'INSERT INTO transactions(transaction_no,visit_id,created_by) VALUES(?,?,?)',
+    [`DS-${today().replaceAll('-','')}-${String(inserted.insertId).padStart(6,'0')}`,inserted.insertId,actor.id]);
+  let visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=?', [inserted.insertId]);
+  let sale = await one<Sale>(db, 'SELECT * FROM transactions WHERE visit_id=?', [visit.id]);
+  if (input.package_id !== null && input.persons !== null) {
+    // Nomor pendaftaran sudah dialokasikan; hindari alokasi ulang saat snapshot pertama dibuat.
+    await selectPackage(db,actor,{ ...visit, status: 'RESERVASI' },sale,input.package_id,input.background_id,input.persons,null);
+    visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=?', [visit.id]);
+    sale = await one<Sale>(db, 'SELECT * FROM transactions WHERE id=?', [sale.id]);
+  }
+  await event(db,actor,visit,'REGISTER',visit.status,null);
+  await audit(db,actor,'visits',visit.id,'REGISTER',null,{ customer_name: visit.customer_name, status: visit.status, service_date: serviceDate });
+  return { visit, sale };
+}
+// Request ID yang sama → kembalikan hasil sebelumnya; dengan isi berbeda → IDEMPOTENCY_CONFLICT.
+async function previousRegistration(db: Db, clientRequestId: string, hash: string): Promise<Visit | undefined> {
+  const previous = (await rows<Visit>(db, 'SELECT * FROM visits WHERE client_request_id=?', [clientRequestId]))[0];
+  if (previous) ensure(previous.request_hash === hash, 'IDEMPOTENCY_CONFLICT', 'Request ID pendaftaran sudah digunakan untuk data berbeda');
+  return previous;
+}
 operations.post('/visits', async (req, res) => {
   const input = z.strictObject({ client_request_id: z.uuid(), customer_name: z.string().trim().min(1).max(100),
     customer_type: z.enum(['WALK_IN','RESERVASI']), appointment_at: timestamp.nullable().default(null),
@@ -229,41 +281,42 @@ operations.post('/visits', async (req, res) => {
     payment: paymentSchema.optional() }).parse(req.body);
   const result = await transaction(async db => {
     const hash = fingerprint(input);
-    const previous = (await rows<Visit>(db, 'SELECT * FROM visits WHERE client_request_id=?', [input.client_request_id]))[0];
-    if (previous) {
-      ensure(previous.request_hash === hash, 'IDEMPOTENCY_CONFLICT', 'Request ID pendaftaran sudah digunakan untuk data berbeda');
-      return detail(db,previous.id);
-    }
-    const reservation = input.customer_type === 'RESERVASI';
-    ensure(reservation ? input.appointment_at !== null : input.appointment_at === null,
-      'APPOINTMENT_INVALID', 'Reservasi wajib memiliki jam janji; walk-in tidak memakai jam janji', 422);
-    ensure(reservation || (input.package_id !== null && input.persons !== null), 'PACKAGE_REQUIRED', 'Walk-in wajib memilih paket dan jumlah orang', 422);
-    ensure(input.package_id !== null || (input.background_id === null && input.persons === null), 'PACKAGE_REQUIRED', 'Latar/jumlah orang memerlukan paket', 422);
-    ensure(input.package_id === null || input.persons !== null, 'PERSONS_REQUIRED', 'Jumlah orang wajib jika paket dipilih', 422);
-    const serviceDate = reservation ? input.appointment_at!.slice(0,10) : today();
-    ensure(serviceDate >= today(), 'PAST_APPOINTMENT', 'Reservasi baru tidak boleh untuk tanggal yang sudah lewat', 422);
-    const selection = input.package_id !== null && input.persons !== null
-      ? await validateSelection(db,input.package_id,input.background_id,input.persons) : null;
-    const queue = !reservation && selection ? await nextNumber(db,selection.pkg.id,serviceDate) : null;
-    const inserted = await run(db, `INSERT INTO visits(customer_name,customer_type,appointment_at,service_date,package_id,background_id,
-      persons,queue_number,queue_entered_at,queue_code_snapshot,status,note,client_request_id,request_hash,created_by)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [input.customer_name,input.customer_type,input.appointment_at,serviceDate,input.package_id,input.background_id,input.persons,
-      queue,queue !== null ? wib() : null,queue !== null ? selection!.pkg.queue_code : null,reservation ? 'RESERVASI' : 'MENUNGGU',
-      input.note,input.client_request_id,hash,actorOf(req).id]);
-    await run(db, 'INSERT INTO transactions(transaction_no,visit_id,created_by) VALUES(?,?,?)',
-      [`DS-${today().replaceAll('-','')}-${String(inserted.insertId).padStart(6,'0')}`,inserted.insertId,actorOf(req).id]);
-    let visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=?', [inserted.insertId]);
-    let sale = await one<Sale>(db, 'SELECT * FROM transactions WHERE visit_id=?', [visit.id]);
-    if (input.package_id !== null && input.persons !== null) {
-      // Nomor pendaftaran sudah dialokasikan; hindari alokasi ulang saat snapshot pertama dibuat.
-      await selectPackage(db,actorOf(req),{ ...visit, status: 'RESERVASI' },sale,input.package_id,input.background_id,input.persons,null);
-      visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=?', [visit.id]);
+    const previous = await previousRegistration(db,input.client_request_id,hash);
+    if (previous) return detail(db,previous.id);
+    const { visit, sale } = await insertVisit(db,actorOf(req),input,hash);
+    if (input.payment) await receivePayment(db,actorOf(req),sale,visit,input.payment);
+    return detail(db,visit.id);
+  });
+  res.status(201).json(result);
+});
+// Alur studio: pelanggan datang langsung memilih paket + tambahan dan membayar LUNAS saat mendaftar.
+// Semua dalam satu transaksi DB: kalau pembayaran tidak melunasi, pendaftaran ikut dibatalkan.
+const walkInSchema = z.strictObject({ client_request_id: z.uuid(), customer_name: z.string().trim().min(1).max(100),
+  package_id: id, background_id: id.nullable().default(null), persons: personsSchema, addons: addonList.default([]),
+  note: z.string().max(500).nullable().default(null),
+  payment: z.strictObject({ client_request_id: z.uuid(), method, amount: money.refine(n => n > 0),
+    reference: z.string().trim().min(1).max(100).nullable().default(null) }).optional() });
+operations.post('/visits/walk-in', async (req, res) => {
+  const input = walkInSchema.parse(req.body);
+  const result = await transaction(async db => {
+    const hash = fingerprint({ kind: 'WALK_IN_PAID', ...input });
+    const previous = await previousRegistration(db,input.client_request_id,hash);
+    if (previous) return detail(db,previous.id);
+    const actor = actorOf(req);
+    let { visit, sale } = await insertVisit(db,actor,{ client_request_id: input.client_request_id, customer_name: input.customer_name,
+      customer_type: 'WALK_IN', appointment_at: null, package_id: input.package_id, background_id: input.background_id,
+      persons: input.persons, note: input.note },hash);
+    if (input.addons.length) {
+      await setAddons(db,actor,visit,sale,input.addons,'Tambahan saat pendaftaran');
       sale = await one<Sale>(db, 'SELECT * FROM transactions WHERE id=?', [sale.id]);
     }
-    await event(db,actorOf(req),visit,'REGISTER',visit.status,null);
-    await audit(db,actorOf(req),'visits',visit.id,'REGISTER',null,{ customer_name: visit.customer_name, status: visit.status, service_date: serviceDate });
-    if (input.payment) await receivePayment(db,actorOf(req),sale,visit,input.payment);
+    if (sale.total > 0) {
+      ensure(input.payment !== undefined, 'PAYMENT_REQUIRED', 'Pendaftaran datang langsung wajib dibayar lunas', 422);
+      await receivePayment(db,actor,sale,visit,{ client_request_id: input.payment.client_request_id, payment_type: 'PEMBAYARAN',
+        method: input.payment.method, amount: input.payment.amount, reference: input.payment.reference });
+    }
+    const b = await balance(db,sale.id);
+    ensure(b.net === sale.total, 'PAYMENT_NOT_SETTLED', `Pembayaran kurang Rp${(sale.total-b.net).toLocaleString('id-ID')}; pendaftaran dibatalkan`, 422);
     return detail(db,visit.id);
   });
   res.status(201).json(result);
@@ -274,13 +327,14 @@ operations.put('/visits/:id/selection', async (req, res) => {
     const visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=? FOR UPDATE', [visitId]);
     active(visit); checkVersion(visit.version,input.version);
     const sale = await one<Sale>(db, 'SELECT * FROM transactions WHERE visit_id=? FOR UPDATE', [visitId]);
+    lockedWhenPaid(sale);
     await selectPackage(db,actorOf(req),visit,sale,input.package_id,input.background_id,input.persons,input.reason);
     return detail(db,visitId);
   }));
 });
 operations.post('/visits/:id/actions', async (req, res) => {
   const visitId = id.parse(Number(req.params['id']));
-  const input = z.strictObject({ version: versionSchema, action: z.enum(['CONFIRM','CALL','START','SKIP','RETURN','CANCEL']),
+  const input = z.strictObject({ version: versionSchema, action: z.enum(['CONFIRM','CALL','START','SKIP','RETURN','CANCEL','FINISH']),
     reason: reason.optional(), priority: z.boolean().default(true) }).parse(req.body);
   res.json(await transaction(async db => {
     const visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=? FOR UPDATE', [visitId]);
@@ -314,7 +368,12 @@ operations.post('/visits/:id/actions', async (req, res) => {
       ensure(sale.price_type_snapshot !== null && b.net === sale.total, 'PAYMENT_REQUIRED_BEFORE_START',
         b.net > sale.total ? 'Kembalikan kelebihan bayar sebelum mulai foto' : 'Lunasi tagihan awal sebelum mulai foto');
       await audit(db,actorOf(req),'transactions',sale.id,'START_PAYMENT_CHECK',null,{ total: sale.total, net_paid: b.net });
-      await run(db, 'UPDATE visits SET started_at=NOW(3) WHERE id=?', [visitId]); next = 'SEDANG_DILAYANI';
+      // Durasi sesi = durasi paket + menit dari tambahan waktu. Disimpan agar perubahan katalog tidak mengubah sesi berjalan.
+      const pkg = await one<{ duration_minutes: number | null }>(db, 'SELECT duration_minutes FROM packages WHERE id=?', [visit.package_id]);
+      const extra = await one<{ total: number | string }>(db, `SELECT COALESCE(SUM(i.qty*a.extra_minutes),0) AS total FROM transaction_items i
+        JOIN addons a ON a.id=i.addon_id WHERE i.transaction_id=? AND i.is_active=TRUE AND i.item_type='TAMBAHAN'`, [sale.id]);
+      const sessionMinutes = pkg.duration_minutes === null ? null : pkg.duration_minutes + Number(extra.total);
+      await run(db, 'UPDATE visits SET started_at=NOW(3),session_minutes=? WHERE id=?', [sessionMinutes,visitId]); next = 'SEDANG_DILAYANI';
     } else if (input.action === 'SKIP') {
       ensure(visit.status === 'DIPANGGIL', 'INVALID_TRANSITION', 'Hanya pelanggan dipanggil yang dapat dilewati');
       ensure(!!input.reason, 'REASON_REQUIRED', 'Alasan melewati wajib diisi', 422); next = 'DILEWATI';
@@ -322,6 +381,15 @@ operations.post('/visits/:id/actions', async (req, res) => {
       ensure(visit.status === 'DILEWATI' && visit.service_date === today(), 'INVALID_TRANSITION', 'Hanya antrean dilewati hari ini yang dapat kembali');
       ensure(!!input.reason, 'REASON_REQUIRED', 'Alasan kembali wajib diisi', 422);
       await run(db, 'UPDATE visits SET has_priority=FALSE,queue_entered_at=NOW(3),called_at=NULL WHERE id=?', [visitId]); next = 'MENUNGGU';
+    } else if (input.action === 'FINISH') {
+      // Alur studio: tagihan sudah lunas saat mendaftar, jadi sesi cukup ditandai selesai (tanpa kasir).
+      ensure(visit.status === 'SEDANG_DILAYANI', 'INVALID_TRANSITION', 'Hanya sesi berjalan dapat diselesaikan');
+      const b = await balance(db,sale.id);
+      ensure(sale.price_type_snapshot !== null && b.net === sale.total, 'UNSETTLED',
+        b.net > sale.total ? 'Ada kelebihan bayar' : 'Tagihan belum lunas');
+      await run(db, 'UPDATE visits SET finished_at=NOW(3) WHERE id=?', [visitId]);
+      await run(db, 'UPDATE transactions SET completed_at=NOW(3),version=version+1 WHERE id=?', [sale.id]);
+      next = 'SELESAI';
     } else {
       ensure(visit.status !== 'SEDANG_DILAYANI', 'CANNOT_CANCEL_STARTED', 'Sesi yang sudah dimulai tidak boleh dibatalkan');
       ensure(!!input.reason, 'REASON_REQUIRED', 'Alasan pembatalan wajib diisi', 422);
@@ -343,6 +411,7 @@ operations.put('/transactions/:id/addons', async (req, res) => {
     const sale = await one<Sale>(db, 'SELECT * FROM transactions WHERE id=? FOR UPDATE', [saleId]);
     checkVersion(sale.version,input.version);
     const visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=? FOR UPDATE', [sale.visit_id]); active(visit);
+    lockedWhenPaid(sale);
     ensure(visit.package_id !== null, 'PACKAGE_REQUIRED', 'Pilih paket sebelum tambahan', 422);
     await setAddons(db,actorOf(req),visit,sale,input.addons,input.reason);
     return detail(db,visit.id);
@@ -444,3 +513,38 @@ operations.post('/transactions/:id/corrections', async (req, res) => {
     return detail(db,visit.id);
   }));
 });
+
+// Kunjungan datang langsung dari hari sebelumnya yang lupa ditutup Admin. Dijalankan server.ts saat menyala lalu berkala.
+// Menunggu/Dipanggil/Dilewati → Dibatalkan (uang tidak dikembalikan, sama dengan Batalkan).
+// Sedang foto yang sudah lunas → Selesai (sesi yang sudah mulai tidak boleh dibatalkan). Reservasi tidak disentuh.
+const STALE_REASON = 'Otomatis: tidak ditutup di hari layanan';
+export async function closeStaleVisits(): Promise<{ cancelled: number; finished: number }> {
+  return transaction(async db => {
+    const stale = await rows<Visit>(db, `SELECT * FROM visits WHERE customer_type='WALK_IN' AND service_date<?
+      AND status IN ('MENUNGGU','DIPANGGIL','DILEWATI','SEDANG_DILAYANI') ORDER BY id FOR UPDATE`, [today()]);
+    let cancelled = 0; let finished = 0;
+    if (!stale.length) return { cancelled, finished };
+    // visit_events.created_by wajib: proses otomatis dicatat atas nama akun Admin, tanpa sesi login.
+    const admin = await one<{ id: number }>(db, "SELECT id FROM users WHERE role='ADMIN' ORDER BY id LIMIT 1");
+    const actor: Actor = { id: admin.id, role: 'ADMIN', sessionId: null as unknown as string, mustChangePassword: false };
+    for (const visit of stale) {
+      const sale = await one<Sale>(db, 'SELECT * FROM transactions WHERE visit_id=? FOR UPDATE', [visit.id]);
+      const b = await balance(db,sale.id);
+      let next: Status; let type: string;
+      if (visit.status === 'SEDANG_DILAYANI') {
+        if (sale.price_type_snapshot === null || b.net !== sale.total) continue; // belum lunas: biarkan Admin yang menangani
+        await run(db, 'UPDATE visits SET finished_at=NOW(3) WHERE id=?', [visit.id]);
+        await run(db, 'UPDATE transactions SET completed_at=NOW(3),version=version+1 WHERE id=?', [sale.id]);
+        next = 'SELESAI'; type = 'AUTO_FINISH'; finished += 1;
+      } else {
+        await run(db, 'UPDATE transactions SET total=?,cancelled_at=NOW(3) WHERE id=?', [b.net,sale.id]);
+        await run(db, 'UPDATE visits SET cancel_reason=? WHERE id=?', [STALE_REASON,visit.id]);
+        await refresh(db,sale.id); next = 'DIBATALKAN'; type = 'AUTO_CANCEL'; cancelled += 1;
+      }
+      await event(db,actor,visit,type,next,STALE_REASON);
+      await run(db, 'UPDATE visits SET status=?,version=version+1 WHERE id=?', [next,visit.id]);
+      await audit(db,actor,'visits',visit.id,type,{ status: visit.status },{ status: next },STALE_REASON);
+    }
+    return { cancelled, finished };
+  });
+}

@@ -13,7 +13,7 @@ Base URL lokal: `http://localhost:3000/api`. Semua body JSON. Kirim `Authorizati
 | PATCH | `/auth/profile` | `{ name }`; username dan role tetap |
 | POST | `/auth/reset-admin-password` | Owner: `{ temporary_password }`; seluruh sesi Admin dicabut |
 
-JWT maksimal 12 jam dan sesi idle maksimal 30 menit. Token saja tidak cukup: backend memeriksa sesi setiap request. Jika `must_change_password=true`, hanya endpoint akun yang diperlukan untuk mengganti sandi/logout dapat digunakan. Frontend sebaiknya menyimpan token di memori, mengirim ulang login saat reload/expired; jangan menulis token ke log atau URL.
+JWT maksimal 12 jam dan sesi idle maksimal 30 menit. Token saja tidak cukup: backend memeriksa sesi setiap request. Jika `must_change_password=true`, hanya endpoint akun yang diperlukan untuk mengganti sandi/logout dapat digunakan. Frontend sebaiknya menyimpan token di memori; jangan menulis token ke log atau URL. (Frontend Dream Space memakai `sessionStorage` per tab supaya reload tidak logout, lalu memeriksa token lewat `GET /auth/me` saat halaman dibuka; tutup tab = logout.)
 
 `GET /auth/me` mengembalikan objek user dengan `must_change_password` boolean, sama seperti `login.user`. Sandi lama yang salah saat ganti sandi menghasilkan **422 INVALID_PASSWORD**, sehingga handler 401 frontend tidak mengeluarkan pengguna. Sesi invalid/dicabut tetap menghasilkan 401. Header `X-Request-Id` dan `Content-Disposition` dapat dibaca browser melalui CORS.
 
@@ -38,16 +38,28 @@ Body paket:
 {
   "name": "Reguler", "queue_code": "RG", "price_type": "PER_KELOMPOK",
   "price": 80000, "included_persons": 4, "extra_person_price": 15000,
-  "min_persons": 1, "max_persons": 10,
-  "description": "Durasi dan fasilitas ditulis Owner", "is_active": true
+  "min_persons": 1, "max_persons": 10, "duration_minutes": 15,
+  "description": "Fasilitas ditulis Owner", "is_active": true
 }
 ```
 
-`price_type`: `PER_SESI`, `PER_ORANG`, `PER_KELOMPOK`. Field opsional nullable di atas default `null`. Paket kelompok wajib `included_persons`. Tarif per orang tidak memakai `included_persons`/`extra_person_price`. Kode paket huruf kapital/angka, dimulai huruf, maksimal 10 karakter.
+`price_type`: `PER_SESI`, `PER_ORANG`, `PER_KELOMPOK`. Field opsional nullable di atas default `null`. `duration_minutes` (1–600, nullable) = durasi sesi untuk timer di Antrean; `null` berarti tanpa timer. Paket kelompok wajib `included_persons`. Tarif per orang tidak memakai `included_persons`/`extra_person_price`. Kode paket huruf kapital/angka, dimulai huruf, maksimal 10 karakter.
 
 Body latar: `{ "name":"Putih", "max_persons":4, "is_active":true }`.
-Body tambahan: `{ "name":"Cetak 4R", "price":10000, "unit":"lembar", "is_active":true }`.
-Tidak ada endpoint hapus master. Nonaktifkan untuk menjaga transaksi historis. Saat mengganti paket kunjungan, kosongkan tambahan paket lama terlebih dahulu.
+Body tambahan: `{ "name":"Tambah waktu", "price":20000, "unit":"5 menit", "extra_minutes":5, "is_active":true }`. `extra_minutes` (1–600, nullable) hanya untuk tambahan waktu: setiap qty menambah durasi sesi; `null` untuk tambahan lain (mis. cetak).
+**Simpan paket sekaligus (pop-up Kelola Paket):** `POST /packages/setup` (buat) dan `PUT /packages/:id/setup` (ubah), Owner. Satu transaksi DB: paket, latar, dan tambahan tersimpan semua atau tidak sama sekali.
+
+```json
+{ "package": { "...": "body paket di atas" },
+  "backgrounds": [{ "id": 5, "name": "Putih", "max_persons": 15, "is_active": true }, { "name": "Hitam", "max_persons": null, "is_active": true }],
+  "addon_ids": [1, 2] }
+```
+
+Latar dengan `id` diubah (harus milik paket itu, `BACKGROUND_MISMATCH` bila tidak), tanpa `id` ditambah; latar yang tidak dikirim tidak berubah. Nama latar kembar dalam satu permintaan → 422 dengan path `backgrounds.N.name`; nama/kode yang sudah dipakai → 409 `DUPLICATE_VALUE`. `addon_ids` mengganti seluruh daftar tambahan paket. Hasil `{ id, ...package }`.
+
+**Hapus tambahan:** `DELETE /addons/:id` (Owner) → `{ id, archived }`. Bila masih tercentang di paket mana pun → 409 `ADDON_IN_USE` (pesan memuat nama paketnya); lepas dulu lewat `PUT /packages/:id/addons` atau `/setup`. Bila belum pernah dipakai transaksi, baris dihapus permanen (`archived:false`); bila sudah pernah dipakai, diarsipkan (`is_active=false`, `archived:true`) karena riwayat/nota masih merujuk ke situ. Tambahan dengan `is_active=false` dianggap terhapus dan ditolak saat pendaftaran.
+
+Paket dan latar tidak punya endpoint hapus; nonaktifkan untuk menjaga transaksi historis. Saat mengganti paket kunjungan, kosongkan tambahan paket lama terlebih dahulu.
 
 ## Kunjungan, antrean, dan riwayat
 
@@ -55,13 +67,28 @@ Tidak ada endpoint hapus master. Nonaktifkan untuk menjaga transaksi historis. S
 |---|---|---|
 | GET | `/visits?date=2026-11-11&history=false&page=1&search=nama` | Admin/Owner, maksimal 100 per halaman. `history=true` hanya selesai/batal. Alternatif rentang `from` dan `to` maksimal 367 hari. |
 | GET | `/visits/:id` | Detail lengkap |
-| GET | `/queue/rooms` | Kondisi ruang dan pelanggan dipanggil/berjalan, termasuk yang berasal dari hari sebelumnya |
-| POST | `/visits` | Admin; pendaftaran atomik dengan transaksi dan pembayaran opsional |
+| GET | `/queue/rooms` | Kondisi ruang dan pelanggan dipanggil/berjalan: `package_id,name,is_open,closed_reason,active_visit_id,customer_name,status,service_date,queue_code_snapshot,queue_number,started_at,session_minutes` |
+| POST | `/visits/walk-in` | Admin; **alur utama datang langsung**: daftar + tambahan + bayar **lunas** dalam satu transaksi DB (lihat bawah) |
+| POST | `/visits` | Admin; pendaftaran atomik dengan transaksi dan pembayaran opsional (dipakai reservasi) |
 | PUT | `/visits/:id/selection` | Admin: `{ version, package_id, background_id, persons, reason }` |
 | POST | `/visits/:id/actions` | Admin: `{ version, action, reason?, priority? }` |
 | POST | `/visits/:id/finish` | Admin; konfirmasi akhir + pembayaran/refund opsional, atomik |
 
-Pendaftaran walk-in:
+Pendaftaran datang langsung dengan pembayaran lunas (alur studio sejak 16 Nov 2026):
+
+```json
+{
+  "client_request_id": "7ce58f2b-8b96-4b4a-9487-6d9803f616cd",
+  "customer_name": "Bayu", "package_id": 1, "background_id": 1, "persons": 3,
+  "addons": [{ "addon_id": 1, "qty": 2 }],
+  "payment": { "client_request_id": "1e3336c7-42aa-40b2-8f72-38e588527167",
+    "method": "TUNAI", "amount": 200000, "reference": null }
+}
+```
+
+Tunai: `amount` = uang diserahkan (kembalian dihitung). Transfer/QRIS: `amount` = total. Kalau pembayaran tidak melunasi, seluruh pendaftaran dibatalkan (`PAYMENT_NOT_SETTLED`, 422). Tanpa `payment` hanya boleh untuk paket bertarif 0 (`PAYMENT_REQUIRED`). Request ID sama → hasil sama; isi berbeda → `IDEMPOTENCY_CONFLICT`. Setelah lunas, paket/latar/jumlah orang/tambahan **terkunci** (`PAID_LOCKED`, 409) sampai fitur koreksi tersedia.
+
+Pendaftaran walk-in tanpa pembayaran (`POST /visits`, cara lama):
 
 ```json
 {
@@ -101,12 +128,13 @@ Detail dan hasil mutasi mengembalikan:
 |---|---|---|
 | CONFIRM | RESERVASI → MENUNGGU | Hari janji, jam sudah tiba, paket lengkap. `priority` default true; false wajib alasan. |
 | CALL | MENUNGGU → DIPANGGIL | Ruangan terbuka/kosong. Keluar urutan wajib alasan. |
-| START | DIPANGGIL → SEDANG_DILAYANI | Seluruh tagihan yang sudah tercatat wajib lunas. Tambahan selama sesi dibayar di akhir. |
+| START | DIPANGGIL → SEDANG_DILAYANI | Seluruh tagihan yang sudah tercatat wajib lunas. Mengisi `visit.session_minutes` = `duration_minutes` paket + Σ(qty × `extra_minutes`) tambahan aktif (`null` bila paket tanpa durasi). Timer = `started_at` + `session_minutes`. |
 | SKIP | DIPANGGIL → DILEWATI | Wajib alasan. |
 | RETURN | DILEWATI → MENUNGGU | Hari yang sama, wajib alasan; kehilangan prioritas, masuk belakang antrean biasa. |
 | CANCEL | Sebelum mulai → DIBATALKAN | Wajib alasan; uang bersih ditahan. Tidak boleh membatalkan sesi berjalan. |
+| FINISH | SEDANG_DILAYANI → SELESAI | Tagihan harus lunas (`UNSETTLED` bila tidak). Cukup `version`; dipakai tombol "Selesai" di Antrean. |
 
-Prioritas: reservasi terkonfirmasi dulu, lalu jam janji, waktu masuk, ID. Kelompok biasa menurut waktu masuk dan ID. Nomor antrean tetap bukan jaminan urutan jika ada prioritas. Sisa antrean akhir hari dibatalkan Admin satu per satu dengan alasan; tidak ada pembatalan otomatis.
+Prioritas: reservasi terkonfirmasi dulu, lalu jam janji, waktu masuk, ID. Kelompok biasa menurut waktu masuk dan ID. Nomor antrean tetap bukan jaminan urutan jika ada prioritas. **Tutup otomatis hari sebelumnya:** saat backend menyala lalu tiap 5 menit, kunjungan datang langsung dengan `service_date` sebelum hari ini ditutup: Menunggu/Dipanggil/Dilewati → DIBATALKAN (alasan "Otomatis: tidak ditutup di hari layanan", uang ditahan seperti CANCEL), Sedang foto yang lunas → SELESAI. Tercatat di `visit_events` (`AUTO_CANCEL`/`AUTO_FINISH`) dan audit atas nama akun Admin. Reservasi tidak disentuh.
 
 ## Kasir
 
@@ -117,7 +145,7 @@ Prioritas: reservasi terkonfirmasi dulu, lalu jam janji, waktu masuk, ID. Kelomp
 | POST | `/transactions/:id/refunds` | Admin: `{ client_request_id, amount, method, reason }` |
 | POST | `/transactions/:id/corrections` | Admin; koreksi dengan audit, lihat bawah |
 | GET | `/transactions/:id/audit` | Admin/Owner; perubahan transaksi dan kunjungannya |
-| GET | `/transactions/:id/receipt.pdf` | Admin/Owner; hanya setelah selesai |
+| GET | `/transactions/:id/receipt.pdf` | Admin/Owner; tersedia sejak **lunas** (`paid_off_at`); nomor antrean dicetak besar di atas |
 
 Pembayaran:
 
@@ -145,7 +173,7 @@ Finish:
 }
 ```
 
-Kirim **seluruh** tambahan akhir, termasuk array kosong bila tidak ada. `reason` wajib jika transaksi yang sudah lunas diubah. `refund` dapat disertakan menggunakan body refund bila penyesuaian membuat kelebihan bayar. Jika saldo akhir tidak sama dengan tagihan, seluruh finish (termasuk pembayaran/perubahan rincian dalam request ini) dibatalkan. Nota baru tersedia setelah sukses.
+Kirim **seluruh** tambahan akhir, termasuk array kosong bila tidak ada. `reason` wajib jika transaksi yang sudah lunas diubah. `refund` dapat disertakan menggunakan body refund bila penyesuaian membuat kelebihan bayar. Jika saldo akhir tidak sama dengan tagihan, seluruh finish (termasuk pembayaran/perubahan rincian dalam request ini) dibatalkan. Endpoint ini dari alur lama; alur studio sekarang memakai aksi `FINISH`.
 
 Koreksi:
 
@@ -166,14 +194,14 @@ Koreksi `payments` mengubah catatan salah dan menyimpan nilai sebelumnya dalam a
 
 `GET /dashboard?period=today`
 
-`GET /reports/{sales|packages|cash|visits}?period=custom&from=2026-11-01&to=2026-11-30&format=json`
+`GET /reports/{sales|packages|cash}?period=custom&from=2026-11-01&to=2026-11-30&format=json`
 
 - Periode: `today`, `week` (Senin–Minggu), `month`, `custom`.
 - Format laporan: `json`, `pdf`, `xlsx`. Maksimum 10.000 baris; persempit periode bila lebih.
-- `sales` / L-01: transaksi selesai berdasarkan `completed_at`.
-- `packages` / L-02: jumlah sesi/nilai per paket, termasuk nol sesi; urut terbanyak.
+- `sales` / L-01: transaksi **lunas** berdasarkan `paid_off_at` (penjualan diakui saat lunas, tanpa transaksi batal). Dashboard `sales`/`sessions` memakai dasar yang sama.
+- `packages` / L-02: jumlah transaksi lunas/nilai per paket (dasar `paid_off_at`), termasuk nol; urut terbanyak.
 - `cash` / L-03: pembayaran berdasarkan `paid_at` dikurangi refund berdasarkan `refunded_at`; pembayaran transaksi batal ditandai `BATAL_DITAHAN`.
-- `visits` / L-04: kunjungan berdasarkan `service_date`, status, waktu, dan status pembayaran. Riwayat perpindahan/kejadian lengkap di detail kunjungan.
+- L-04 rekap kunjungan **dihapus** (16 Nov 2026); kebutuhannya dipenuhi menu Riwayat (`GET /visits?history=true`).
 - Dashboard `cancelled_net_cash` adalah penerimaan dikurangi refund dalam periode untuk transaksi yang saat ini batal, bukan nilai penjualan.
 
 ## Retry, konflik, dan error

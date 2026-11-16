@@ -1,21 +1,23 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { actorOf, role } from './auth.js';
-import { ensure, id, money, reason, type PriceType } from './core.js';
+import { ensure, id, money, reason, type Actor, type PriceType } from './core.js';
 import { snapshot as read, transaction, rows, one, run, audit, type Db } from './db.js';
 
 export interface Package {
   id: number; name: string; queue_code: string; price_type: PriceType; price: number;
   included_persons: number | null; extra_person_price: number | null;
-  min_persons: number | null; max_persons: number | null; is_open: number; is_active: number;
+  min_persons: number | null; max_persons: number | null; duration_minutes: number | null; is_open: number; is_active: number;
 }
 export interface Background { id: number; name: string; max_persons: number | null }
 const count = z.number().int().min(1).max(1000);
+const minutes = z.number().int().min(1).max(600); // durasi sesi / tambahan waktu (menit)
 const packageSchema = z.strictObject({
   name: z.string().trim().min(1).max(100), queue_code: z.string().regex(/^[A-Z][A-Z0-9]{0,9}$/),
   price_type: z.enum(['PER_SESI', 'PER_ORANG', 'PER_KELOMPOK']), price: money,
   included_persons: count.nullable().default(null), extra_person_price: money.nullable().default(null),
   min_persons: count.nullable().default(null), max_persons: count.nullable().default(null),
+  duration_minutes: minutes.nullable().default(null),
   description: z.string().max(5000).nullable().default(null), is_active: z.boolean().default(true),
 }).superRefine((p, ctx) => {
   if (p.min_persons !== null && p.max_persons !== null && p.min_persons > p.max_persons)
@@ -28,9 +30,60 @@ const packageSchema = z.strictObject({
     ctx.addIssue({ code: 'custom', path: ['price_type'], message: 'Tarif per orang tidak memakai orang tercakup/tarif tambahan' });
 });
 const addonSchema = z.strictObject({ name: z.string().trim().min(1).max(100), price: money,
-  unit: z.string().trim().min(1).max(40), is_active: z.boolean().default(true) });
+  unit: z.string().trim().min(1).max(40), extra_minutes: minutes.nullable().default(null), is_active: z.boolean().default(true) });
 const backgroundSchema = z.strictObject({ name: z.string().trim().min(1).max(100),
   max_persons: count.nullable().default(null), is_active: z.boolean().default(true) });
+const addonIds = z.array(id).max(100).refine(list => new Set(list).size === list.length, 'Tambahan tidak boleh berulang');
+// Kelola Paket (pop-up): info paket + latar + tambahan tersedia disimpan sekaligus dalam satu transaksi.
+// Latar dengan id = ubah, tanpa id = tambah. Latar tidak dihapus (nonaktifkan lewat is_active).
+const setupSchema = z.strictObject({
+  package: packageSchema,
+  backgrounds: z.array(backgroundSchema.extend({ id: id.optional() })).max(50).default([]),
+  addon_ids: addonIds.default([]),
+}).superRefine((input, ctx) => {
+  const seen = new Set<string>();
+  input.backgrounds.forEach((bg, index) => {
+    const key = bg.name.toLowerCase();
+    if (seen.has(key)) ctx.addIssue({ code: 'custom', path: ['backgrounds', index, 'name'], message: 'Nama latar kembar' });
+    seen.add(key);
+  });
+});
+type PackageInput = z.infer<typeof packageSchema>;
+type BackgroundInput = z.infer<typeof backgroundSchema>;
+
+async function insertPackage(db: Db, actor: Actor, p: PackageInput): Promise<number> {
+  const result = await run(db, `INSERT INTO packages(name,queue_code,price_type,price,included_persons,extra_person_price,
+    min_persons,max_persons,duration_minutes,description,is_active,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+  [p.name,p.queue_code,p.price_type,p.price,p.included_persons,p.extra_person_price,p.min_persons,p.max_persons,p.duration_minutes,p.description,p.is_active,actor.id]);
+  await audit(db, actor, 'packages', result.insertId, 'CREATE', null, p);
+  return result.insertId;
+}
+async function updatePackageRow(db: Db, actor: Actor, packageId: number, p: PackageInput): Promise<void> {
+  const old = await one<Record<string, string | number | null>>(db, 'SELECT * FROM packages WHERE id=? FOR UPDATE', [packageId]);
+  await run(db, `UPDATE packages SET name=?,queue_code=?,price_type=?,price=?,included_persons=?,extra_person_price=?,
+    min_persons=?,max_persons=?,duration_minutes=?,description=?,is_active=?,updated_by=? WHERE id=?`,
+  [p.name,p.queue_code,p.price_type,p.price,p.included_persons,p.extra_person_price,p.min_persons,p.max_persons,p.duration_minutes,p.description,p.is_active,actor.id,packageId]);
+  await audit(db, actor, 'packages', packageId, 'UPDATE', old, p);
+}
+async function insertBackground(db: Db, actor: Actor, packageId: number, p: BackgroundInput): Promise<number> {
+  const result = await run(db, 'INSERT INTO package_backgrounds(package_id,name,max_persons,is_active) VALUES(?,?,?,?)',
+    [packageId,p.name,p.max_persons,p.is_active]);
+  await audit(db, actor, 'package_backgrounds', result.insertId, 'CREATE', null, { package_id: packageId, ...p });
+  return result.insertId;
+}
+async function updateBackgroundRow(db: Db, actor: Actor, backgroundId: number, p: BackgroundInput, packageId?: number): Promise<void> {
+  const old = await one<Record<string, string | number | null>>(db, 'SELECT * FROM package_backgrounds WHERE id=? FOR UPDATE', [backgroundId]);
+  ensure(packageId === undefined || old['package_id'] === packageId, 'BACKGROUND_MISMATCH', 'Latar bukan milik paket ini', 422);
+  await run(db, 'UPDATE package_backgrounds SET name=?,max_persons=?,is_active=? WHERE id=?', [p.name,p.max_persons,p.is_active,backgroundId]);
+  await audit(db, actor, 'package_backgrounds', backgroundId, 'UPDATE', old, p);
+}
+async function replacePackageAddons(db: Db, actor: Actor, packageId: number, ids: number[]): Promise<void> {
+  for (const addonId of ids) await one(db, 'SELECT id FROM addons WHERE id=?', [addonId]);
+  const old = await rows<{ addon_id: number }>(db, 'SELECT addon_id FROM package_addons WHERE package_id=?', [packageId]);
+  await run(db, 'DELETE FROM package_addons WHERE package_id=?', [packageId]);
+  for (const addonId of ids) await run(db, 'INSERT INTO package_addons VALUES(?,?)', [packageId,addonId]);
+  await audit(db, actor, 'packages', packageId, 'ALLOWED_ADDONS', old.map(p => p.addon_id), ids);
+}
 export async function validateSelection(db: Db, packageId: number, backgroundId: number | null,
   persons: number, existing?: { package_id: number | null; background_id: number | null; persons: number | null }): Promise<{ pkg: Package; background: Background | null }> {
   const pkg = await one<Package>(db, 'SELECT * FROM packages WHERE id=? FOR UPDATE', [packageId]);
@@ -57,24 +110,12 @@ catalog.get('/packages', async (_req, res) => res.json(await read(async db => ({
 catalog.get('/addons', async (_req, res) => res.json(await read(db => rows(db, 'SELECT * FROM addons ORDER BY id'))));
 catalog.post('/packages', role('OWNER'), async (req, res) => {
   const p = packageSchema.parse(req.body);
-  const result = await transaction(async db => {
-    const result = await run(db, `INSERT INTO packages(name,queue_code,price_type,price,included_persons,extra_person_price,
-      min_persons,max_persons,description,is_active,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-    [p.name,p.queue_code,p.price_type,p.price,p.included_persons,p.extra_person_price,p.min_persons,p.max_persons,p.description,p.is_active,actorOf(req).id]);
-    await audit(db, actorOf(req), 'packages', result.insertId, 'CREATE', null, p);
-    return { id: result.insertId, ...p };
-  });
-  res.status(201).json(result);
+  const packageId = await transaction(db => insertPackage(db, actorOf(req), p));
+  res.status(201).json({ id: packageId, ...p });
 });
 catalog.put('/packages/:id', role('OWNER'), async (req, res) => {
   const packageId = id.parse(Number(req.params['id'])); const p = packageSchema.parse(req.body);
-  await transaction(async db => {
-    const old = await one<Record<string, string | number | null>>(db, 'SELECT * FROM packages WHERE id=? FOR UPDATE', [packageId]);
-    await run(db, `UPDATE packages SET name=?,queue_code=?,price_type=?,price=?,included_persons=?,extra_person_price=?,
-      min_persons=?,max_persons=?,description=?,is_active=?,updated_by=? WHERE id=?`,
-    [p.name,p.queue_code,p.price_type,p.price,p.included_persons,p.extra_person_price,p.min_persons,p.max_persons,p.description,p.is_active,actorOf(req).id,packageId]);
-    await audit(db, actorOf(req), 'packages', packageId, 'UPDATE', old, p);
-  });
+  await transaction(db => updatePackageRow(db, actorOf(req), packageId, p));
   res.json({ id: packageId, ...p });
 });
 catalog.patch('/packages/:id/availability', role('ADMIN'), async (req, res) => {
@@ -97,7 +138,7 @@ catalog.patch('/packages/:id/availability', role('ADMIN'), async (req, res) => {
 catalog.post('/addons', role('OWNER'), async (req, res) => {
   const p = addonSchema.parse(req.body);
   const addonId = await transaction(async db => {
-    const result = await run(db, 'INSERT INTO addons(name,price,unit,is_active) VALUES(?,?,?,?)', [p.name,p.price,p.unit,p.is_active]);
+    const result = await run(db, 'INSERT INTO addons(name,price,unit,extra_minutes,is_active) VALUES(?,?,?,?,?)', [p.name,p.price,p.unit,p.extra_minutes,p.is_active]);
     await audit(db, actorOf(req), 'addons', result.insertId, 'CREATE', null, p); return result.insertId;
   });
   res.status(201).json({ id: addonId, ...p });
@@ -106,41 +147,75 @@ catalog.put('/addons/:id', role('OWNER'), async (req, res) => {
   const addonId = id.parse(Number(req.params['id'])); const p = addonSchema.parse(req.body);
   await transaction(async db => {
     const old = await one<Record<string, string | number | null>>(db, 'SELECT * FROM addons WHERE id=?', [addonId]);
-    await run(db, 'UPDATE addons SET name=?,price=?,unit=?,is_active=? WHERE id=?', [p.name,p.price,p.unit,p.is_active,addonId]);
+    await run(db, 'UPDATE addons SET name=?,price=?,unit=?,extra_minutes=?,is_active=? WHERE id=?', [p.name,p.price,p.unit,p.extra_minutes,p.is_active,addonId]);
     await audit(db, actorOf(req), 'addons', addonId, 'UPDATE', old, p);
   });
   res.json({ id: addonId, ...p });
+});
+// Hapus tambahan layanan. Masih tercentang di paket mana pun → ditolak (lepas dulu dari paketnya).
+// Belum pernah dipakai transaksi → dihapus permanen; sudah pernah dipakai → diarsipkan (is_active=FALSE)
+// karena riwayat/nota masih merujuk ke baris ini.
+catalog.delete('/addons/:id', role('OWNER'), async (req, res) => {
+  const addonId = id.parse(Number(req.params['id']));
+  const archived = await transaction(async db => {
+    const old = await one<Record<string, string | number | null>>(db, 'SELECT * FROM addons WHERE id=? FOR UPDATE', [addonId]);
+    const links = await rows<{ name: string }>(db,
+      'SELECT p.name FROM package_addons pa JOIN packages p ON p.id=pa.package_id WHERE pa.addon_id=? ORDER BY p.id', [addonId]);
+    ensure(links.length === 0, 'ADDON_IN_USE',
+      `Masih dipakai di paket ${links.map(l => l.name).join(', ')}. Lepas dulu dari paket tersebut.`);
+    const used = (await rows(db, 'SELECT id FROM transaction_items WHERE addon_id=? LIMIT 1', [addonId])).length > 0;
+    if (used) await run(db, 'UPDATE addons SET is_active=FALSE WHERE id=?', [addonId]);
+    else await run(db, 'DELETE FROM addons WHERE id=?', [addonId]);
+    await audit(db, actorOf(req), 'addons', addonId, used ? 'ARCHIVE' : 'DELETE', old, null);
+    return used;
+  });
+  res.json({ id: addonId, archived });
 });
 catalog.post('/packages/:id/backgrounds', role('OWNER'), async (req, res) => {
   const packageId = id.parse(Number(req.params['id'])); const p = backgroundSchema.parse(req.body);
   const backgroundId = await transaction(async db => {
     await one(db, 'SELECT id FROM packages WHERE id=?', [packageId]);
-    const result = await run(db, 'INSERT INTO package_backgrounds(package_id,name,max_persons,is_active) VALUES(?,?,?,?)',
-      [packageId,p.name,p.max_persons,p.is_active]);
-    await audit(db, actorOf(req), 'package_backgrounds', result.insertId, 'CREATE', null, { package_id: packageId, ...p });
-    return result.insertId;
+    return insertBackground(db, actorOf(req), packageId, p);
   });
   res.status(201).json({ id: backgroundId, ...p });
 });
 catalog.put('/backgrounds/:id', role('OWNER'), async (req, res) => {
   const backgroundId = id.parse(Number(req.params['id'])); const p = backgroundSchema.parse(req.body);
-  await transaction(async db => {
-    const old = await one<Record<string, string | number | null>>(db, 'SELECT * FROM package_backgrounds WHERE id=?', [backgroundId]);
-    await run(db, 'UPDATE package_backgrounds SET name=?,max_persons=?,is_active=? WHERE id=?', [p.name,p.max_persons,p.is_active,backgroundId]);
-    await audit(db, actorOf(req), 'package_backgrounds', backgroundId, 'UPDATE', old, p);
-  });
+  await transaction(db => updateBackgroundRow(db, actorOf(req), backgroundId, p));
   res.json({ id: backgroundId, ...p });
 });
 catalog.put('/packages/:id/addons', role('OWNER'), async (req, res) => {
   const packageId = id.parse(Number(req.params['id']));
-  const input = z.strictObject({ addon_ids: z.array(id).max(100).refine(list => new Set(list).size === list.length) }).parse(req.body);
+  const input = z.strictObject({ addon_ids: addonIds }).parse(req.body);
   await transaction(async db => {
     await one(db, 'SELECT id FROM packages WHERE id=?', [packageId]);
-    for (const addonId of input.addon_ids) await one(db, 'SELECT id FROM addons WHERE id=?', [addonId]);
-    const old = await rows<{ addon_id: number }>(db, 'SELECT addon_id FROM package_addons WHERE package_id=?', [packageId]);
-    await run(db, 'DELETE FROM package_addons WHERE package_id=?', [packageId]);
-    for (const addonId of input.addon_ids) await run(db, 'INSERT INTO package_addons VALUES(?,?)', [packageId,addonId]);
-    await audit(db, actorOf(req), 'packages', packageId, 'ALLOWED_ADDONS', old.map(p => p.addon_id), input.addon_ids);
+    await replacePackageAddons(db, actorOf(req), packageId, input.addon_ids);
   });
   res.json(input);
+});
+// Kelola Paket: info + latar + tambahan tersedia sekaligus (semua tersimpan atau tidak sama sekali).
+async function saveSetup(db: Db, actor: Actor, packageId: number, input: z.infer<typeof setupSchema>): Promise<void> {
+  for (const bg of input.backgrounds) {
+    const { id: backgroundId, ...data } = bg;
+    if (backgroundId === undefined) await insertBackground(db, actor, packageId, data);
+    else await updateBackgroundRow(db, actor, backgroundId, data, packageId);
+  }
+  await replacePackageAddons(db, actor, packageId, input.addon_ids);
+}
+catalog.post('/packages/setup', role('OWNER'), async (req, res) => {
+  const input = setupSchema.parse(req.body);
+  const packageId = await transaction(async db => {
+    const created = await insertPackage(db, actorOf(req), input.package);
+    await saveSetup(db, actorOf(req), created, input);
+    return created;
+  });
+  res.status(201).json({ id: packageId, ...input.package });
+});
+catalog.put('/packages/:id/setup', role('OWNER'), async (req, res) => {
+  const packageId = id.parse(Number(req.params['id'])); const input = setupSchema.parse(req.body);
+  await transaction(async db => {
+    await updatePackageRow(db, actorOf(req), packageId, input.package);
+    await saveSetup(db, actorOf(req), packageId, input);
+  });
+  res.json({ id: packageId, ...input.package });
 });
