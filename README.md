@@ -12,13 +12,12 @@ Reservasi pelanggan tetap dilakukan melalui WhatsApp, kemudian dicatat oleh Admi
 - Mengatur antrean setiap paket atau ruang studio.
 - Menghitung tagihan paket dan layanan tambahan secara konsisten.
 - Menyediakan riwayat transaksi dan laporan untuk Owner.
-- Mencatat perubahan penting agar koreksi transaksi dapat ditelusuri.
 
 ## Pengguna Sistem
 
 | Pengguna | Tanggung jawab |
 | --- | --- |
-| **Admin** | Mencatat reservasi dan walk-in, mengelola antrean, menerima pembayaran, mencatat tambahan layanan, melakukan koreksi dan refund kelebihan bayar, serta mencetak nota. |
+| **Admin** | Mendaftarkan pelanggan datang langsung beserta tambahan layanan, menerima pembayaran, mencetak nota, dan mengelola antrean. |
 | **Owner** | Mengelola paket, harga, latar, dan layanan tambahan; memantau antrean dan transaksi; melihat dashboard, mengekspor laporan, serta mereset kata sandi Admin. |
 
 Sistem menggunakan dua akun tetap: satu akun Admin bersama dan satu akun Owner.
@@ -28,24 +27,24 @@ Sistem menggunakan dua akun tetap: satu akun Admin bersama dan satu akun Owner.
 | Modul | Fitur |
 | --- | --- |
 | **Paket dan Harga** | Pengelolaan paket, kode antrean, pilihan latar, kapasitas orang, harga, dan tambahan layanan. |
-| **Reservasi dan Antrean** | Reservasi WhatsApp, pendaftaran walk-in, ubah data kunjungan, konfirmasi kedatangan, prioritas reservasi, panggil, lewati, kembali, mulai, selesai, serta tutup/buka ruangan sementara. |
-| **Kasir dan Pembayaran** | DP reservasi, pembayaran tunai/transfer/QRIS, kembalian tunai, tambahan layanan, refund kelebihan bayar, dan koreksi dengan riwayat audit. |
-| **Nota dan Riwayat** | Nota PDF setelah sesi selesai, cetak ulang nota, serta riwayat transaksi selesai dan dibatalkan. |
-| **Dashboard dan Laporan** | Ringkasan penjualan, kinerja paket, arus kas, dan kunjungan, dengan ekspor PDF dan Excel. |
+| **Pendaftaran dan Pembayaran** | Pendaftaran datang langsung sekaligus pembayaran lunas (tunai/transfer/QRIS, kembalian tunai), tambahan layanan dipilih saat mendaftar. |
+| **Antrean** | Antrean per paket: panggil, lewati, kembalikan, mulai foto, selesai, batalkan, tutup/buka ruangan sementara, timer sesi foto dengan notifikasi waktu habis, serta penutupan otomatis kunjungan hari sebelumnya. |
+| **Nota dan Riwayat** | Nota PDF setelah lunas (nomor antrean di atas), cetak ulang nota, serta riwayat sesi selesai dan dibatalkan. |
+| **Dashboard dan Laporan** | Ringkasan penjualan (dihitung saat lunas), kinerja paket, dan arus kas, dengan ekspor PDF dan Excel. |
 | **Akun dan Keamanan** | Login, pembatasan hak akses, perubahan kata sandi, pencabutan sesi, dan batas sesi tidak aktif. |
 
 ## Alur Operasional
 
-1. Admin mencatat reservasi atau pelanggan yang datang langsung.
-2. Pelanggan memilih paket, latar jika tersedia, dan jumlah orang.
-3. Pelanggan masuk antrean sesuai paketnya; reservasi mendapat nomor setelah kedatangan dikonfirmasi.
-4. Admin memanggil pelanggan. **Seluruh tagihan yang sudah tercatat harus lunas sebelum foto dimulai.**
-5. Tambahan selama sesi, seperti tambah waktu atau cetak, dicatat sebagai tambahan tagihan dan boleh dibayar di akhir.
-6. Setelah seluruh tagihan akhir lunas, Admin menyelesaikan sesi dan mencetak nota.
+Alur pelanggan datang langsung:
 
-**Contoh:** paket Rp100.000 dibayar sebelum foto → pelanggan menambah layanan Rp20.000 saat sesi → tambahan Rp20.000 dibayar di akhir → sesi selesai dan nota tersedia.
+1. Di menu **Pendaftaran**, Admin mencatat nama panggilan, paket, latar, jumlah orang, dan tambahan layanan (tambah waktu/cetak).
+2. Pelanggan **membayar lunas** saat itu juga. Admin menekan **Konfirmasi & Masuk Antrean**; muncul pop-up nomor antrean dan tombol **Cetak Nota** (nomor antrean ada di atas nota).
+3. Pelanggan menunggu di antrean paketnya. Admin memanggil, lalu memulai foto; timer berjalan sesuai durasi paket + tambah waktu, dan notifikasi muncul saat waktu habis.
+4. Setelah sesi foto, Admin menekan **Selesai**. Sesi masuk **Riwayat**.
 
-DP belum dianggap cukup untuk memulai foto jika masih ada sisa tagihan. Pembatalan hanya dapat dilakukan sebelum foto dimulai; pembayaran yang sudah diterima ditahan sesuai aturan usaha. Refund digunakan untuk kelebihan bayar.
+**Contoh:** paket Rp100.000 + tambah waktu Rp20.000 → dibayar Rp120.000 saat mendaftar → masuk antrean → foto → selesai.
+
+Setelah lunas, paket dan tambahan tidak bisa diubah. Pembatalan hanya sebelum foto dimulai; uang yang sudah dibayar tidak dikembalikan. Kunjungan yang belum ditutup sampai ganti hari ditutup otomatis oleh sistem.
 
 ## Teknologi
 
@@ -92,8 +91,8 @@ Dream-Space/
         ├── modules/         satu folder per modul, masing-masing dengan README
         │   ├── akun/        login, profil, ganti & reset kata sandi
         │   ├── paket/       paket, latar, tambahan layanan, tutup/buka ruangan
-        │   ├── antrean/     pendaftaran, reservasi, papan antrean, detail kunjungan
-        │   ├── kasir/       kasir, nota, riwayat, koreksi transaksi
+        │   ├── antrean/     papan antrean, detail kunjungan
+        │   ├── kasir/       pendaftaran + pembayaran, nota, riwayat
         │   └── laporan/     dashboard dan laporan Owner
         └── shared/          komponen dasar, koneksi API, format Rupiah/tanggal
 ```
@@ -150,7 +149,7 @@ Buka `backend/.env`, lalu isi:
 Isian lain (`PORT=3000`, `FRONTEND_ORIGIN=http://localhost:5173`, `DB_NAME`, `DB_USER`) biarkan seperti contoh. Lalu:
 
 ```bash
-npm run db:migrate    # membuat tabel (sekali saja)
+npm run db:migrate    # membuat/memperbarui tabel
 npm run db:seed       # membuat akun admin & owner (sekali saja)
 npm run dev
 ```
@@ -172,11 +171,13 @@ Buka **http://localhost:5173**. Biarkan kedua terminal tetap terbuka selama mema
 
 1. Login sebagai `owner` dengan sandi `SEED_OWNER_PASSWORD`. Sistem meminta **ganti kata sandi** dulu (minimal 12 karakter), lalu login lagi dengan sandi baru.
 2. Lakukan hal yang sama untuk `admin` dengan `SEED_ADMIN_PASSWORD`.
-3. Sebagai Owner, buka **Kelola Paket**: buat tambahan layanan, paket, dan latarnya. Setelah ada paket, Admin bisa mencoba Antrean, Kasir, dan Riwayat.
+3. Sebagai Owner, buka **Kelola Paket**: buat tambahan layanan, paket, dan latarnya. Setelah ada paket, Admin bisa mencoba Pendaftaran, Antrean, dan Riwayat.
 
 ### 7. Menjalankan lagi di hari lain
 
-Laragon → **Start All**, lalu `npm run dev` di folder `backend`, kemudian `npm run dev` di folder `frontend`. Migrasi dan seed **tidak** perlu diulang.
+Laragon → **Start All**, lalu `npm run dev` di folder `backend`, kemudian `npm run dev` di folder `frontend`. Seed **tidak** perlu diulang.
+
+Setelah `git pull`, jalankan `npm ci` lalu `npm run db:migrate` di folder `backend` (aman diulang; hanya menjalankan migrasi baru), dan `npm ci` di folder `frontend`.
 
 <details>
 <summary><strong>Masalah umum</strong></summary>
@@ -198,15 +199,16 @@ Backend dan frontend sudah berada di branch `main`, masing-masing di folder [`ba
 | --- | --- | --- |
 | Backend: migrasi, autentikasi, katalog, antrean, kasir, laporan, backup | Duha | Selesai; unit & integration test lulus |
 | Frontend: menu, komponen dasar, Login | Ihsan | Selesai |
-| Frontend: Antrean (pendaftaran, per paket, ringkasan, detail kunjungan) | Ihsan | Selesai |
-| Frontend: Kasir dan Riwayat (pembayaran, refund, nota, koreksi) | Ihsan | Selesai |
+| Frontend: Pendaftaran (daftar + bayar lunas, nota) dan Riwayat | Ihsan | Selesai |
+| Frontend: Antrean (per paket, ringkasan, detail kunjungan) | Ihsan | Selesai |
 | Frontend: Paket/Kelola Paket, Dashboard, Laporan, Profil | Larisa | Selesai |
 
 Tahap berikutnya: uji integrasi tim, UAT di studio, pengujian printer nota, dan deployment.
 
 Batasan yang diketahui (rincian di README modul [antrean](frontend/src/modules/antrean/README.md) dan [kasir](frontend/src/modules/kasir/README.md)):
-- Jam janji reservasi belum bisa diubah karena backend belum menyediakan endpoint-nya.
-- Koreksi transaksi baru mencakup nama pelanggan serta metode/referensi pembayaran; koreksi nominal belum tersedia.
+- **Reservasi WhatsApp** (DP lalu pelunasan) ditunda: tampilannya disembunyikan, kode backend tetap ada.
+- **Koreksi transaksi** (mis. ganti paket setelah lunas) belum tersedia; akan ditambahkan kemudian.
+- Laporan Rekap Kunjungan (L-04) dan refund dihapus dari tampilan; perbedaan laporan Penjualan dan Penerimaan Uang akan ditinjau ulang.
 
 ## Dokumentasi dan Mulai Pengembangan
 
