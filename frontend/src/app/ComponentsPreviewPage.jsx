@@ -75,7 +75,7 @@ export default function ComponentsPreviewPage() {
           <div className="space-y-4">
             <Input label="Uang Diterima (Rp)" placeholder="Rp150.000" hint="Isi uang yang diserahkan pelanggan." />
             <Input label="Nama panggilan" defaultValue="" error="Nama panggilan wajib diisi." />
-            <Select label="Paket" placeholder="Pilih paket" options={[{ value: 1, label: 'Reguler Studio (RG)' }]} />
+            <Select label="Paket" placeholder="Pilih paket" defaultValue="" options={[{ value: 1, label: 'Reguler Studio (RG)' }]} />
             <SegmentedControl label="Metode bayar" tone="brand" options={METHOD_OPTIONS} value={method} onChange={setMethod} />
           </div>
         </Card>

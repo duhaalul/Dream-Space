@@ -1,309 +1,335 @@
-import { useEffect, useState } from 'react'
-import { Plus, Sparkles } from 'lucide-react'
-import { Alert, Badge, Button, Input } from '@/shared/components/ui'
+import { useState } from 'react'
+import { Check, Package, Pencil, Plus, Sparkles, Timer, Trash2, X } from 'lucide-react'
+import { Alert, Button, Input, Modal } from '@/shared/components/ui'
 import { formatRupiah } from '@/shared/utils/format'
-import { createAddon, getAddons, updateAddon } from '../api'
+import { createAddon, deleteAddon, updateAddon } from '../api'
 
-const EMPTY_ADDON = {
-  name: '',
-  price: '',
-  unit: '',
+const EMPTY = { name: '', price: '', qty: '1', unit: '' }
+const ROW_INPUT = 'rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand-500 focus:bg-white'
+
+// "tambah aksesoris" → "Tambah aksesoris"
+const capitalizeFirst = (value) => value.replace(/^(\s*)(\S)/, (_, space, char) => space + char.toUpperCase())
+
+// Satuan waktu menambah timer sesi: menit/mnt = jumlah menit, jam = jumlah × 60.
+function minutesOf(qty, unit) {
+  const name = unit.trim().toLowerCase()
+  if (name === 'menit' || name === 'mnt') return qty
+  if (name === 'jam') return qty * 60
+  return null
 }
 
-// Kelola tambahan layanan (UC-05), Owner saja.
-// Dipakai di halaman Kelola Paket.
-export default function AddonManager({ addons: externalAddons, onChanged }) {
-  const [internalAddons, setInternalAddons] = useState([])
-  const addons = externalAddons ?? internalAddons
+// unit tersimpan → isian: "5 menit" → { qty: '5', unit: 'menit' }, "lembar" → { qty: '1', unit: 'lembar' }
+function splitUnit(unit = '') {
+  const match = /^(\d+)\s+(.+)$/.exec(unit.trim())
+  return match ? { qty: match[1], unit: match[2] } : { qty: '1', unit: unit.trim() }
+}
 
-  const [form, setForm] = useState(EMPTY_ADDON)
-  const [fieldErrors, setFieldErrors] = useState({})
+function toForm(addon) {
+  return { name: addon.name ?? '', price: String(addon.price ?? ''), ...splitUnit(addon.unit) }
+}
+
+// Validasi → { errors, payload }. unit disimpan "5 menit", atau cukup "lembar" bila jumlah 1.
+function validate(form) {
+  const errors = {}
+  const name = form.name.trim()
+  const price = form.price.trim() === '' ? NaN : Number(form.price)
+  const qty = Number(form.qty)
+  const unit = form.unit.trim()
+  if (!name) errors.name = 'Isi nama.'
+  if (!Number.isInteger(price) || price < 0) errors.price = 'Isi harga (angka bulat).'
+  if (!unit) errors.unit = 'Isi satuan.'
+  if (!Number.isInteger(qty) || qty < 1 || qty > 999) errors.qty = 'Jumlah 1–999.'
+  const minutes = errors.qty || errors.unit ? null : minutesOf(qty, unit)
+  if (minutes !== null && minutes > 600) errors.qty = 'Maksimal 600 menit.'
+  if (Object.keys(errors).length) return { errors, payload: null }
+  return {
+    errors,
+    payload: { name, price, unit: qty === 1 ? unit : `${qty} ${unit}`, extra_minutes: minutes, is_active: true },
+  }
+}
+
+// Isian "Per": jumlah + satuan (diketik bebas).
+function PerFields({ form, onChange, errors = {}, compact = false }) {
+  return (
+    <div className="flex gap-2">
+      <input
+        type="number"
+        min="1"
+        max="999"
+        step="1"
+        aria-label="Jumlah per"
+        value={form.qty}
+        onChange={(e) => onChange({ ...form, qty: e.target.value })}
+        className={`${ROW_INPUT} ${compact ? 'w-16' : 'w-20 py-3'} ${errors.qty ? 'border-red-300' : ''}`}
+      />
+      <input
+        aria-label="Satuan"
+        placeholder="Mis. menit, lembar"
+        maxLength={30}
+        value={form.unit}
+        onChange={(e) => onChange({ ...form, unit: e.target.value })}
+        className={`${ROW_INPUT} min-w-0 flex-1 ${compact ? '' : 'py-3'} ${errors.unit ? 'border-red-300' : ''}`}
+      />
+    </div>
+  )
+}
+
+// Tambahan Layanan (Owner, di halaman Kelola Paket): tambah, ubah, hapus.
+// Tambahan yang sudah dihapus (arsip, is_active=0) tidak ditampilkan.
+// usage = { [addonId]: [nama paket] } — tambahan yang masih tercentang di paket tidak bisa dihapus.
+export default function AddonManager({ addons = [], usage = {}, onChanged }) {
+  const [form, setForm] = useState(EMPTY)
+  const [errors, setErrors] = useState({})
   const [editingId, setEditingId] = useState(null)
-  const [editForm, setEditForm] = useState({ name: '', price: '', unit: '', is_active: true })
+  const [editForm, setEditForm] = useState(EMPTY)
+  const [editErrors, setEditErrors] = useState({})
+  const [confirming, setConfirming] = useState(null) // tambahan yang akan dihapus
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(null) // 'create' | 'update' | 'delete'
 
-  useEffect(() => {
-    if (externalAddons !== undefined) return
-    getAddons()
-      .then((list) => setInternalAddons(list ?? []))
-      .catch((err) => setError(err))
-  }, [externalAddons])
+  const list = addons.filter((addon) => Number(addon.is_active) === 1)
 
-  async function notifyChanged() {
-    if (onChanged) {
-      await onChanged()
-    } else {
-      const list = await getAddons()
-      setInternalAddons(list ?? [])
-    }
-  }
-
-  function validateAddonInput(input) {
-    const errors = {}
-    const name = String(input.name ?? '').trim()
-    const unit = String(input.unit ?? '').trim()
-    const rawPrice = String(input.price ?? '').trim()
-    const price = rawPrice === '' ? NaN : Number(rawPrice)
-
-    if (!name) errors.name = 'Nama tambahan wajib diisi.'
-    if (!Number.isInteger(price) || price < 0) {
-      errors.price = 'Harga wajib berupa angka bulat minimal 0.'
-    }
-    if (!unit) errors.unit = 'Satuan wajib diisi (mis. 5 menit, lembar).'
-
-    return {
-      errors,
-      payload:
-        Object.keys(errors).length === 0
-          ? { name, price, unit, is_active: input.is_active ?? true }
-          : null,
+  async function run(kind, action, message) {
+    setBusy(kind)
+    setError(null)
+    setSuccess(null)
+    try {
+      await action()
+      setSuccess(message)
+      await onChanged?.()
+      return true
+    } catch (err) {
+      setError(err)
+      return false
+    } finally {
+      setBusy(null)
     }
   }
 
   async function handleCreate(event) {
     event.preventDefault()
-    const { errors, payload } = validateAddonInput({ ...form, is_active: true })
-    setFieldErrors(errors)
+    const { errors: next, payload } = validate(form)
+    setErrors(next)
     if (!payload) return
-
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      const created = await createAddon(payload)
-      setForm(EMPTY_ADDON)
-      setSuccess(`Tambahan "${created.name}" (${formatRupiah(created.price)} per ${created.unit}) berhasil ditambahkan.`)
-      await notifyChanged()
-    } catch (err) {
-      setError(err)
-    } finally {
-      setLoading(false)
-    }
+    if (await run('create', () => createAddon(payload), `"${payload.name}" ditambahkan.`)) setForm(EMPTY)
   }
 
   function startEdit(addon) {
     setEditingId(addon.id)
-    setEditForm({
-      name: addon.name ?? '',
-      price: String(addon.price ?? 0),
-      unit: addon.unit ?? '',
-      is_active: Boolean(addon.is_active),
-    })
+    setEditForm(toForm(addon))
+    setEditErrors({})
     setError(null)
     setSuccess(null)
   }
 
   async function handleUpdate(addonId) {
-    const { errors, payload } = validateAddonInput(editForm)
-    if (!payload) {
-      setError({ message: Object.values(errors)[0] || 'Periksa kembali isian tambahan layanan.' })
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      const updated = await updateAddon(addonId, payload)
-      setEditingId(null)
-      setSuccess(`Tambahan "${updated.name}" berhasil diperbarui.`)
-      await notifyChanged()
-    } catch (err) {
-      setError(err)
-    } finally {
-      setLoading(false)
-    }
+    const { errors: next, payload } = validate(editForm)
+    setEditErrors(next)
+    if (!payload) return
+    if (await run('update', () => updateAddon(addonId, payload), `"${payload.name}" disimpan.`)) setEditingId(null)
   }
 
-  async function handleToggleActive(addon) {
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await updateAddon(addon.id, {
-        name: addon.name,
-        price: Number(addon.price),
-        unit: addon.unit,
-        is_active: !addon.is_active,
-      })
-      await notifyChanged()
-    } catch (err) {
-      setError(err)
-    } finally {
-      setLoading(false)
-    }
+  async function handleDelete() {
+    const addon = confirming
+    if (await run('delete', () => deleteAddon(addon.id), `"${addon.name}" dihapus.`)) setConfirming(null)
+    // Ditolak karena ternyata masih dipakai (data berubah di komputer lain): muat ulang supaya peringatan tampil.
+    else onChanged?.()
   }
+
+  const inUse = confirming ? (usage[confirming.id] ?? []) : []
+
+  const firstError = (errs) => errs.name ?? errs.price ?? errs.qty ?? errs.unit
 
   return (
     <div className="space-y-5">
-      {error && (
+      {error && !confirming && (
         <Alert variant="error" requestId={error.status >= 500 ? error.requestId : null}>
           {error.message}
         </Alert>
       )}
       {success && <Alert variant="success">{success}</Alert>}
 
-      <form onSubmit={handleCreate} className="grid gap-4 sm:grid-cols-12">
-        <div className="sm:col-span-5">
-          <Input
-            label="Nama Tambahan Layanan *"
-            placeholder="Mis. Tambah waktu, Tambah cetak 4R"
-            value={form.name}
-            onChange={(event) => {
-              setForm((prev) => ({ ...prev, name: event.target.value }))
-              setFieldErrors((prev) => ({ ...prev, name: null }))
-            }}
-            error={fieldErrors.name}
-            maxLength={100}
-            required
-          />
-        </div>
+      <form onSubmit={handleCreate} noValidate className="grid gap-4 sm:grid-cols-12 sm:items-start">
+        <Input
+          className="sm:col-span-4"
+          label="Nama *"
+          placeholder="Mis. Tambah waktu"
+          maxLength={100}
+          value={form.name}
+          onChange={(e) => {
+            setForm({ ...form, name: capitalizeFirst(e.target.value) })
+            setErrors({ ...errors, name: null })
+          }}
+          error={errors.name}
+        />
+        <Input
+          className="sm:col-span-3"
+          label="Harga *"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="Mis. 20000"
+          value={form.price}
+          onChange={(e) => {
+            setForm({ ...form, price: e.target.value })
+            setErrors({ ...errors, price: null })
+          }}
+          error={errors.price}
+          hint={Number(form.price) > 0 ? formatRupiah(form.price) : undefined}
+        />
         <div className="sm:col-span-3">
-          <Input
-            label="Harga (Rp) *"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="20000"
-            value={form.price}
-            onChange={(event) => {
-              setForm((prev) => ({ ...prev, price: event.target.value }))
-              setFieldErrors((prev) => ({ ...prev, price: null }))
+          <p className="mb-1.5 text-sm text-slate-500">Per *</p>
+          <PerFields
+            form={form}
+            errors={errors}
+            onChange={(next) => {
+              setForm(next)
+              setErrors({ ...errors, qty: null, unit: null })
             }}
-            error={fieldErrors.price}
-            required
           />
+          {(errors.qty || errors.unit) && <p className="mt-1.5 text-xs text-red-600">{errors.qty ?? errors.unit}</p>}
         </div>
-        <div className="sm:col-span-2">
-          <Input
-            label="Satuan *"
-            placeholder="5 menit / lembar"
-            value={form.unit}
-            onChange={(event) => {
-              setForm((prev) => ({ ...prev, unit: event.target.value }))
-              setFieldErrors((prev) => ({ ...prev, unit: null }))
-            }}
-            error={fieldErrors.unit}
-            maxLength={40}
-            required
-          />
-        </div>
-        <div className="flex items-end sm:col-span-2">
-          <Button type="submit" variant="success" loading={loading} className="w-full">
-            <Plus aria-hidden="true" className="h-4 w-4" />
-            Tambah
+        <div className="sm:col-span-2 sm:pt-7">
+          <Button type="submit" variant="success" loading={busy === 'create'} className="w-full">
+            {busy !== 'create' && <Plus aria-hidden="true" className="h-4 w-4" />} Tambah
           </Button>
         </div>
       </form>
 
       <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80">
-        {addons.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-slate-400">
-            Belum ada tambahan layanan terdaftar.
-          </p>
+        {list.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-slate-400">Belum ada tambahan layanan.</p>
         ) : (
-          addons.map((addon) => {
-            const isEditing = editingId === addon.id
-            return (
-              <div
-                key={addon.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 text-sm"
-              >
-                {isEditing ? (
-                  <div className="flex flex-1 flex-wrap items-center gap-2.5">
-                    <input
-                      type="text"
-                      value={editForm.name}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({ ...prev, name: event.target.value }))
-                      }
-                      className="min-w-44 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800"
-                      placeholder="Nama tambahan"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={editForm.price}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({ ...prev, price: event.target.value }))
-                      }
-                      className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-                      placeholder="Harga (Rp)"
-                    />
-                    <input
-                      type="text"
-                      value={editForm.unit}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({ ...prev, unit: event.target.value }))
-                      }
-                      className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-                      placeholder="Satuan"
-                    />
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      loading={loading}
-                      onClick={() => handleUpdate(addon.id)}
-                    >
-                      Simpan
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="neutral"
-                      onClick={() => setEditingId(null)}
-                      disabled={loading}
-                    >
-                      Batal
-                    </Button>
+          list.map((addon) =>
+            editingId === addon.id ? (
+              <div key={addon.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    aria-label="Nama tambahan"
+                    maxLength={100}
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: capitalizeFirst(e.target.value) })}
+                    className={`${ROW_INPUT} min-w-40 flex-1 font-medium ${editErrors.name ? 'border-red-300' : ''}`}
+                  />
+                  <input
+                    aria-label="Harga tambahan"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={editForm.price}
+                    onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                    className={`${ROW_INPUT} w-28 ${editErrors.price ? 'border-red-300' : ''}`}
+                  />
+                  <div className="w-56">
+                    <PerFields compact form={editForm} errors={editErrors} onChange={setEditForm} />
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                        <Sparkles aria-hidden="true" className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="font-bold text-slate-800">{addon.name}</p>
-                        <p className="text-xs text-slate-500">
-                          <span className="font-semibold text-brand-600">
-                            {formatRupiah(addon.price)}
-                          </span>{' '}
-                          per {addon.unit}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={addon.is_active ? 'green' : 'gray'}>
-                        {addon.is_active ? 'Aktif' : 'Nonaktif'}
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant="soft"
-                        onClick={() => startEdit(addon)}
-                        disabled={loading}
-                      >
-                        Ubah
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={addon.is_active ? 'danger' : 'soft-success'}
-                        onClick={() => handleToggleActive(addon)}
-                        disabled={loading}
-                      >
-                        {addon.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                      </Button>
-                    </div>
-                  </>
-                )}
+                  <Button size="sm" variant="primary" loading={busy === 'update'} onClick={() => handleUpdate(addon.id)}>
+                    {busy !== 'update' && <Check aria-hidden="true" className="h-3.5 w-3.5" />} Simpan
+                  </Button>
+                  <Button size="sm" variant="neutral" onClick={() => setEditingId(null)} disabled={busy === 'update'}>
+                    <X aria-hidden="true" className="h-3.5 w-3.5" /> Batal
+                  </Button>
+                </div>
+                {firstError(editErrors) && <p className="mt-1.5 text-xs text-red-600">{firstError(editErrors)}</p>}
               </div>
-            )
-          })
+            ) : (
+              <div key={addon.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 text-sm">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                    <Sparkles aria-hidden="true" className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800">{addon.name}</p>
+                    <p className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span>
+                        <span className="font-semibold text-brand-600">{formatRupiah(addon.price)}</span> / {addon.unit}
+                      </span>
+                      {addon.extra_minutes ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 font-semibold text-brand-600">
+                          <Timer aria-hidden="true" className="h-3 w-3" />+{addon.extra_minutes} menit
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="soft" onClick={() => startEdit(addon)} disabled={busy !== null}>
+                    <Pencil aria-hidden="true" className="h-3.5 w-3.5" /> Ubah
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => {
+                      setError(null)
+                      setSuccess(null)
+                      setConfirming(addon)
+                    }}
+                    disabled={busy !== null}
+                  >
+                    <Trash2 aria-hidden="true" className="h-3.5 w-3.5" /> Hapus
+                  </Button>
+                </div>
+              </div>
+            ),
+          )
         )}
       </div>
+
+      {confirming && inUse.length > 0 && (
+        <Modal
+          open
+          title={`${confirming.name} belum bisa dihapus`}
+          onClose={() => setConfirming(null)}
+          footer={
+            <Button variant="primary" onClick={() => setConfirming(null)}>
+              <Check aria-hidden="true" className="h-4 w-4" /> Mengerti
+            </Button>
+          }
+        >
+          <div className="space-y-3 text-sm text-slate-600">
+            <p>Layanan ini masih tersedia di paket:</p>
+            <div className="flex flex-wrap gap-2">
+              {inUse.map((name) => (
+                <span key={name} className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                  <Package aria-hidden="true" className="h-3.5 w-3.5" />
+                  {name}
+                </span>
+              ))}
+            </div>
+            <p>
+              Lepas centangnya di paket tersebut (<strong>Ubah</strong> → <strong>Tambahan Tersedia</strong>), lalu hapus kembali.
+            </p>
+          </div>
+        </Modal>
+      )}
+
+      {confirming && inUse.length === 0 && (
+        <Modal
+          open
+          title={`Hapus ${confirming.name}?`}
+          onClose={() => setConfirming(null)}
+          footer={
+            <>
+              <Button variant="neutral" onClick={() => setConfirming(null)} disabled={busy === 'delete'}>
+                <X aria-hidden="true" className="h-4 w-4" /> Batal
+              </Button>
+              <Button variant="danger" loading={busy === 'delete'} onClick={handleDelete}>
+                {busy !== 'delete' && <Trash2 aria-hidden="true" className="h-4 w-4" />} Hapus
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">Tindakan ini tidak bisa dibatalkan.</p>
+            {error && (
+              <Alert variant="error" requestId={error.status >= 500 ? error.requestId : null}>
+                {error.message}
+              </Alert>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

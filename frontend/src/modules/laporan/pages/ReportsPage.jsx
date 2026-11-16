@@ -10,14 +10,9 @@ import {
   StatCard,
   Table,
 } from '@/shared/components/ui'
-import {
-  CUSTOMER_TYPES,
-  PAYMENT_METHOD_LABELS,
-  VISIT_STATUS_LABELS,
-  VISIT_STATUS_TONES,
-} from '@/shared/utils/constants'
+import { PAYMENT_METHOD_LABELS } from '@/shared/utils/constants'
 import { saveBlob } from '@/shared/utils/download'
-import { formatDate, formatDateTime, formatRupiah, formatTime, todayWib } from '@/shared/utils/format'
+import { formatDate, formatDateTime, formatRupiah, todayWib } from '@/shared/utils/format'
 import { downloadReport, getReport, REPORT_CODES } from '../api'
 import PeriodFilter from '../components/PeriodFilter'
 import { buildPeriodQuery, validatePeriodRange } from '../periodUtils'
@@ -26,14 +21,6 @@ const REPORT_OPTIONS = Object.entries(REPORT_CODES).map(([value, label]) => ({
   value,
   label,
 }))
-
-const PAYMENT_STATUS_BADGES = {
-  LUNAS: { label: 'Lunas', tone: 'green' },
-  BELUM_LUNAS: { label: 'Belum Lunas', tone: 'amber' },
-  BELUM_DIBAYAR: { label: 'Belum Dibayar', tone: 'red' },
-  KELEBIHAN_BAYAR: { label: 'Kelebihan Bayar', tone: 'indigo' },
-  TIDAK_ADA_TAGIHAN: { label: 'Tanpa Tagihan', tone: 'gray' },
-}
 
 const CASH_CATEGORY_BADGES = {
   NORMAL: { label: 'Transaksi Normal', tone: 'green' },
@@ -174,8 +161,8 @@ export default function ReportsPage() {
       const totalPersons = rows.reduce((sum, r) => sum + Number(r.persons ?? 0), 0)
       return [
         { label: 'Total Nilai Penjualan', value: formatRupiah(totalSales), tone: 'brand' },
-        { label: 'Transaksi Selesai', value: `${rows.length} Sesi`, tone: 'green' },
-        { label: 'Pelanggan Terlayani', value: `${totalPersons} Orang`, tone: 'brand' },
+        { label: 'Transaksi Lunas', value: `${rows.length} Transaksi`, tone: 'green' },
+        { label: 'Jumlah Orang', value: `${totalPersons} Orang`, tone: 'brand' },
       ]
     }
     if (reportCode === 'packages') {
@@ -184,7 +171,7 @@ export default function ReportsPage() {
       const topPkg = rows.find((r) => Number(r.sessions) > 0)
       return [
         { label: 'Total Penjualan Paket', value: formatRupiah(totalSales), tone: 'brand' },
-        { label: 'Total Sesi Selesai', value: `${totalSessions} Sesi`, tone: 'green' },
+        { label: 'Total Transaksi Lunas', value: `${totalSessions} Transaksi`, tone: 'green' },
         { label: 'Paket Terlaris', value: topPkg ? topPkg.name : 'Belum ada', tone: 'brand' },
       ]
     }
@@ -214,13 +201,7 @@ export default function ReportsPage() {
         },
       ]
     }
-    const doneVisits = rows.filter((r) => r.status === 'SELESAI').length
-    const cancelledVisits = rows.filter((r) => r.status === 'DIBATALKAN').length
-    return [
-      { label: 'Total Kunjungan', value: `${rows.length} Kunjungan`, tone: 'brand' },
-      { label: 'Selesai Foto', value: `${doneVisits} Kunjungan`, tone: 'green' },
-      { label: 'Dibatalkan', value: `${cancelledVisits} Kunjungan`, tone: 'brand' },
-    ]
+    return []
   }, [reportCode, rows, cashSplit])
 
   const columnsByCode = useMemo(() => {
@@ -256,9 +237,9 @@ export default function ReportsPage() {
           render: (row) => <b className="text-slate-900">{formatRupiah(row.total)}</b>,
         },
         {
-          key: 'completed_at',
-          header: 'Waktu Selesai (WIB)',
-          render: (row) => formatDateTime(row.completed_at),
+          key: 'paid_off_at',
+          header: 'Waktu Lunas (WIB)',
+          render: (row) => formatDateTime(row.paid_off_at),
         },
       ]
     }
@@ -279,7 +260,7 @@ export default function ReportsPage() {
         },
         {
           key: 'sessions',
-          header: 'Jumlah Sesi Selesai',
+          header: 'Jumlah Transaksi',
           align: 'right',
           render: (row) => (
             <Badge tone={Number(row.sessions) > 0 ? 'green' : 'gray'}>
@@ -364,79 +345,7 @@ export default function ReportsPage() {
       ]
     }
 
-    // visits (L-04)
-    return [
-      {
-        key: 'queue_label',
-        header: 'Antrean',
-        render: (row) => <b className="text-brand-600">{row.queue_label || '-'}</b>,
-      },
-      {
-        key: 'customer_name',
-        header: 'Pelanggan',
-        render: (row) => (
-          <div>
-            <p className="font-semibold text-slate-800">{row.customer_name}</p>
-            <p className="text-xs text-slate-500">
-              {row.customer_type === CUSTOMER_TYPES.RESERVASI
-                ? `Reservasi${row.appointment_at ? ` (${formatTime(row.appointment_at)})` : ''}`
-                : 'Datang langsung'}
-            </p>
-          </div>
-        ),
-      },
-      {
-        key: 'service_date',
-        header: 'Tanggal Layanan',
-        render: (row) => formatDate(row.service_date),
-      },
-      {
-        key: 'status',
-        header: 'Status Kunjungan',
-        render: (row) => (
-          <div className="space-y-1">
-            <Badge tone={VISIT_STATUS_TONES[row.status] ?? 'gray'}>
-              {VISIT_STATUS_LABELS[row.status] ?? row.status}
-            </Badge>
-            {row.cancel_reason && (
-              <p className="max-w-48 truncate text-[11px] text-red-600" title={row.cancel_reason}>
-                Alasan: {row.cancel_reason}
-              </p>
-            )}
-          </div>
-        ),
-      },
-      {
-        key: 'times',
-        header: 'Rincian Waktu (WIB)',
-        render: (row) => (
-          <div className="text-xs text-slate-600">
-            <span>Masuk: {formatTime(row.queue_entered_at)}</span>
-            {' · '}
-            <span>Mulai: {formatTime(row.started_at)}</span>
-            {' · '}
-            <span>Selesai: {formatTime(row.finished_at)}</span>
-          </div>
-        ),
-      },
-      {
-        key: 'payment_status',
-        header: 'Status Bayar',
-        render: (row) => {
-          const badge = PAYMENT_STATUS_BADGES[row.payment_status] ?? {
-            label: row.payment_status,
-            tone: 'gray',
-          }
-          return <Badge tone={badge.tone}>{badge.label}</Badge>
-        },
-      },
-      {
-        key: 'total',
-        header: 'Total Tagihan',
-        align: 'right',
-        render: (row) => <b className="text-slate-900">{formatRupiah(row.total)}</b>,
-      },
-    ]
+    return []
   }, [reportCode, rows])
 
   const errorMessage = error ? (ERROR_MESSAGES[error.code] ?? error.message) : null
@@ -452,7 +361,7 @@ export default function ReportsPage() {
       <PageHeader
         title="Laporan"
         code="T-08"
-        description="Rekap laporan operasional dan keuangan Owner (L-01 s.d. L-04) beserta ekspor PDF dan Excel."
+        description="Rekap laporan operasional dan keuangan Owner (L-01 s.d. L-03) beserta ekspor PDF dan Excel."
         actions={
           <PeriodFilter
             period={period}
@@ -474,7 +383,7 @@ export default function ReportsPage() {
           </Alert>
         )}
 
-        {/* Pilihan Jenis Laporan L-01 s.d. L-04 */}
+        {/* Pilihan Jenis Laporan L-01 s.d. L-03 */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <SegmentedControl
             label="Jenis laporan"
@@ -566,7 +475,7 @@ export default function ReportsPage() {
         {reportCode === 'cash' && !loading && (
           <Card
             title="Penerimaan dari Transaksi Dibatalkan (Ditahan)"
-            description="Pembayaran dari kunjungan yang dibatalkan sebelum sesi foto dimulai. Ditampilkan terpisah karena bukan merupakan nilai penjualan sesi selesai."
+            description="Pembayaran dari kunjungan yang dibatalkan sebelum sesi foto dimulai. Ditampilkan terpisah karena bukan nilai penjualan."
             actions={
               <Badge tone="red">
                 {cashSplit.cancelledRows.length} Transaksi Batal

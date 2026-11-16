@@ -20,6 +20,10 @@ function HomeRedirect() {
 }
 
 export default function App() {
+  const { restoring } = useAuth()
+  // Setelah reload: tunggu sesi tersimpan dicek dulu, supaya tidak sempat terlempar ke Login.
+  if (restoring) return <PageLoading />
+
   return (
     <Routes>
       {publicRoutes.map(({ path, component: Page }) => (

@@ -4,12 +4,30 @@
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/+$/, '')
 
-// Token disimpan di memori (bukan localStorage), sesuai saran docs/API.md.
+// Token disimpan di memori + sessionStorage (per tab): reload tetap login, tutup tab = logout.
+// Backend tetap memeriksa sesi setiap request (idle 30 menit, JWT maks. 12 jam).
+const TOKEN_KEY = 'dreamspace:token'
 let authToken = null
 let unauthorizedHandler = null
 
 export function setAuthToken(token) {
   authToken = token
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token)
+    else sessionStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // Penyimpanan browser diblokir: token cukup di memori (reload = login ulang).
+  }
+}
+
+// Pasang lagi token dari sessionStorage (setelah reload). → true bila ada token tersimpan.
+export function restoreAuthToken() {
+  try {
+    authToken = sessionStorage.getItem(TOKEN_KEY)
+  } catch {
+    authToken = null
+  }
+  return authToken !== null
 }
 
 export function setUnauthorizedHandler(handler) {
@@ -92,6 +110,7 @@ export const api = {
   post: (path, body, options) => request('POST', path, { ...options, body }),
   put: (path, body, options) => request('PUT', path, { ...options, body }),
   patch: (path, body, options) => request('PATCH', path, { ...options, body }),
+  delete: (path, options) => request('DELETE', path, options),
   // Untuk file PDF/Excel (nota, laporan).
   download: (path, query) => request('GET', path, { query, responseType: 'blob' }),
 }

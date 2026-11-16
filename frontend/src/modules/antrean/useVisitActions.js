@@ -14,40 +14,41 @@ const SUCCESS = {
   START: (visit) => `Sesi foto ${nameOf(visit)} dimulai.`,
   SKIP: (visit) => `${nameOf(visit)} dilewati.`,
   RETURN: (visit) => `${visit.customer_name} kembali ke antrean paling belakang.`,
-  CANCEL: (visit) => `Kunjungan ${nameOf(visit)} dibatalkan.`,
+  CANCEL: (visit) => `${nameOf(visit)} dibatalkan.`,
+  FINISH: (visit) => `Sesi ${nameOf(visit)} selesai.`,
 }
 
-// Isi dialog alasan untuk tindakan yang wajib alasan (backend: REASON_REQUIRED / OUT_OF_ORDER_REASON).
+// Isi dialog alasan (backend: REASON_REQUIRED / OUT_OF_ORDER_REASON). Teks dibuat singkat.
 function reasonDialog(visit, action) {
   const name = nameOf(visit)
   const configs = {
     CALL: {
-      title: `Panggil ${name} di luar urutan`,
-      description: 'Pelanggan ini bukan urutan berikutnya. Tulis alasannya, misalnya pelanggan sebelumnya belum ada di studio.',
+      title: `Panggil ${name}`,
+      description: 'Bukan urutan berikutnya.',
       confirmLabel: 'Panggil',
       variant: 'warning',
-      placeholder: 'Mis. urutan sebelumnya belum datang',
+      placeholder: 'Mis. urutan sebelumnya belum ada',
     },
     SKIP: {
       title: `Lewati ${name}`,
-      description: 'Pelanggan pindah ke daftar Dilewati. Bila kembali, bisa dikembalikan ke antrean paling belakang.',
+      description: null,
       confirmLabel: 'Lewati',
       variant: 'neutral',
-      placeholder: 'Mis. tidak ada di studio saat dipanggil',
+      placeholder: 'Mis. tidak ada di studio',
     },
     RETURN: {
-      title: `Kembalikan ${name} ke antrean`,
-      description: 'Pelanggan masuk antrean paling belakang dan kehilangan prioritas reservasi.',
+      title: `Kembalikan ${name}`,
+      description: 'Masuk antrean paling belakang.',
       confirmLabel: 'Kembalikan',
       variant: 'primary',
-      placeholder: 'Mis. pelanggan sudah kembali ke studio',
+      placeholder: 'Mis. sudah kembali ke studio',
     },
     CANCEL: {
-      title: `Batalkan kunjungan ${name}`,
-      description: 'Hanya bisa sebelum foto dimulai. Uang yang sudah dibayar (termasuk DP) tidak dikembalikan.',
-      confirmLabel: 'Batalkan Kunjungan',
+      title: `Batalkan ${name}`,
+      description: 'Uang yang sudah dibayar tidak dikembalikan.',
+      confirmLabel: 'Batalkan',
       variant: 'danger',
-      placeholder: 'Mis. pelanggan membatalkan lewat WhatsApp',
+      placeholder: 'Mis. pelanggan tidak jadi',
     },
   }
   return { visit, action, ...configs[action] }
@@ -55,7 +56,7 @@ function reasonDialog(visit, action) {
 
 function errorNotice(error, visit) {
   if (error?.code === 'PAYMENT_REQUIRED_BEFORE_START') {
-    return { variant: 'warning', message: `${error.message}. Selesaikan pembayaran ${nameOf(visit)} di Kasir.`, kasirVisitId: visit.id }
+    return { variant: 'warning', message: `${nameOf(visit)}: ${error.message}.` }
   }
   if (error?.code === 'STALE_VERSION') {
     return {
@@ -71,6 +72,9 @@ function errorNotice(error, visit) {
 
 // Menjalankan tombol tindakan kunjungan. Selalu mengirim visit.version terbaru;
 // setelah berhasil atau gagal, data dimuat ulang (STALE_VERSION tidak dikirim ulang otomatis).
+// Dipancarkan setelah tindakan berhasil, supaya notifikasi waktu habis langsung diperbarui.
+export const QUEUE_CHANGED_EVENT = 'dreamspace:queue-changed'
+
 export function useVisitActions(reload) {
   const [busyId, setBusyId] = useState(null)
   const [notice, setNotice] = useState(null) // { variant, message, kasirVisitId?, requestId? }
@@ -88,6 +92,7 @@ export function useVisitActions(reload) {
       })
       setDialog(null)
       setNotice({ variant: 'success', message: SUCCESS[action](visit) })
+      window.dispatchEvent(new Event(QUEUE_CHANGED_EVENT))
     } catch (error) {
       if (error?.code === 'OUT_OF_ORDER_REASON' && !reason) {
         setDialog(reasonDialog(visit, VISIT_ACTIONS.CALL))

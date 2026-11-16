@@ -7,7 +7,7 @@ export function formatRupiah(amount) {
 }
 
 // Backend mengirim waktu WIB "YYYY-MM-DD HH:mm:ss" (kadang dengan ".000").
-function parseBackendDate(value) {
+export function parseBackendDate(value) {
   if (!value) return null
   const [datePart, timePart = '00:00:00'] = String(value).split(' ')
   return new Date(`${datePart}T${timePart.slice(0, 8)}+07:00`)
@@ -46,4 +46,13 @@ export function formatDateTime(value) {
 // Tanggal hari ini di WIB dalam format backend "YYYY-MM-DD".
 export function todayWib() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date())
+}
+
+// 750000 ms → "12:30", 3725000 ms → "1:02:05" (timer sesi)
+export function formatDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = String(total % 60).padStart(2, '0')
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
 }

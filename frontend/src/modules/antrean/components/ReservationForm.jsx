@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ArrowRight, Plus, X } from 'lucide-react'
-import { Alert, Button, Card, Input, Select } from '@/shared/components/ui'
+import { CalendarCheck, Plus, X } from 'lucide-react'
+import { Alert, Button, Input, Select } from '@/shared/components/ui'
 import { CUSTOMER_TYPES, PAYMENT_METHOD_LABELS } from '@/shared/utils/constants'
 import { formatDateTime, formatRupiah, todayWib } from '@/shared/utils/format'
 import { createVisit } from '../api'
@@ -27,17 +27,19 @@ const EMPTY_FORM = {
 }
 
 const METHOD_OPTIONS = Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => ({ value, label }))
+const isDirty = (form) => Object.values(form).some((value) => String(value).trim() !== '')
 
-// Kartu "Reservasi WhatsApp (Booking)" (UC-07): nama panggilan, tanggal & jam janji,
+// Form "Reservasi" (WhatsApp, UC-07) di pop-up Pelanggan Baru: nama panggilan, tanggal & jam janji,
 // paket/latar/jumlah orang bila sudah dipilih, dan DP bila ada.
 // DP cukup nominal + metode (+ referensi untuk nontunai). Tanpa gambar QRIS,
 // nomor rekening, atau unggah bukti transfer.
-export default function ReservationForm({ catalog, autoFocus = false }) {
+// onContextChange({ packageId, date, time, dirty }) → panel jadwal & konfirmasi tutup di pop-up.
+// onSaved(pesan) → pop-up ditutup.
+export default function ReservationForm({ catalog, autoFocus = false, onContextChange, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [withPackage, setWithPackage] = useState(false)
   const [errors, setErrors] = useState({})
   const [alert, setAlert] = useState(null)
-  const [success, setSuccess] = useState(null)
   const [saving, setSaving] = useState(false)
   const [requestIds, setRequestIds] = useState(newRequestIds)
 
@@ -49,7 +51,7 @@ export default function ReservationForm({ catalog, autoFocus = false }) {
   function change(next) {
     setForm(next)
     setErrors({})
-    setSuccess(null)
+    onContextChange?.({ packageId: next.package_id, date: next.date, time: next.time, dirty: isDirty(next) })
   }
 
   function togglePackage(show) {
@@ -92,7 +94,6 @@ export default function ReservationForm({ catalog, autoFocus = false }) {
     const nextErrors = validate()
     setErrors(nextErrors)
     setAlert(null)
-    setSuccess(null)
     if (Object.keys(nextErrors).length) return
 
     const hasDp = form.dp_amount !== ''
@@ -115,14 +116,10 @@ export default function ReservationForm({ catalog, autoFocus = false }) {
         }),
       })
       setRequestIds(newRequestIds())
-      setForm(EMPTY_FORM)
-      setWithPackage(false)
       const dpText = hasDp
         ? ` · DP ${formatRupiah(result.balance.paid)} (${PAYMENT_METHOD_LABELS[form.dp_method]})`
         : ''
-      setSuccess(
-        `Reservasi ${result.visit.customer_name} tersimpan untuk ${formatDateTime(result.visit.appointment_at)} WIB${dpText}.`,
-      )
+      onSaved?.(`Reservasi ${result.visit.customer_name} tersimpan untuk ${formatDateTime(result.visit.appointment_at)} WIB${dpText}.`)
     } catch (error) {
       const outcome = interpretSaveError(error)
       setErrors(outcome.fields)
@@ -134,107 +131,104 @@ export default function ReservationForm({ catalog, autoFocus = false }) {
   }
 
   return (
-    <Card title="Reservasi WhatsApp (Booking)" description="Catat jadwal janji dan DP bila ada">
-      <form noValidate className="space-y-4" onSubmit={submit}>
-        {success && <Alert variant="success">{success}</Alert>}
-        {alert && (
-          <Alert variant="error" requestId={alert.requestId}>
-            {alert.message}
-          </Alert>
-        )}
+    <form noValidate className="space-y-4" onSubmit={submit}>
+      <p className="text-sm text-slate-500">Reservasi dari WhatsApp: catat jadwal janji dan DP bila ada.</p>
+      {alert && (
+        <Alert variant="error" requestId={alert.requestId}>
+          {alert.message}
+        </Alert>
+      )}
 
+      <Input
+        label="Nama Panggilan Pelanggan *"
+        placeholder="Contoh: Citra"
+        autoFocus={autoFocus}
+        maxLength={100}
+        autoComplete="off"
+        value={form.customer_name}
+        onChange={(event) => change({ ...form, customer_name: event.target.value })}
+        error={errors.customer_name}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <Input
-          label="Nama Panggilan Pelanggan *"
-          placeholder="Contoh: Citra"
-          autoFocus={autoFocus}
+          label="Tanggal Janji *"
+          type="date"
+          min={today}
+          value={form.date}
+          onChange={(event) => {
+            const date = event.target.value
+            // Jam yang sudah lewat untuk tanggal baru dikosongkan.
+            const time = availableSlots(date, today).includes(form.time) ? form.time : ''
+            change({ ...form, date, time })
+          }}
+          error={errors.date}
+        />
+        <Select
+          label="Jam Janji *"
+          placeholder={slots.length ? 'Pilih jam' : 'Tidak ada jam tersisa hari ini'}
+          options={slots.map((slot) => ({ value: slot, label: `${slot} WIB` }))}
+          value={form.time}
+          onChange={(event) => change({ ...form, time: event.target.value })}
+          error={errors.time}
+        />
+      </div>
+
+      {withPackage ? (
+        <div className="space-y-4 rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-700">Paket (opsional)</p>
+            <Button variant="ghost" size="sm" onClick={() => togglePackage(false)}>
+              <X aria-hidden="true" className="h-3.5 w-3.5" /> Kosongkan paket
+            </Button>
+          </div>
+          <PackageFields catalog={catalog} value={form} onChange={change} errors={errors} optional />
+          {pkg && <EstimateBox pkg={pkg} persons={form.persons} />}
+        </div>
+      ) : (
+        <Button variant="soft" size="sm" onClick={() => togglePackage(true)}>
+          <Plus aria-hidden="true" className="h-3.5 w-3.5" /> Pilih paket sekarang (opsional)
+        </Button>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          label="Nominal DP (Rp)"
+          type="number"
+          inputMode="numeric"
+          min="1"
+          step="1"
+          placeholder="Kosongkan bila tanpa DP"
+          value={form.dp_amount}
+          onChange={(event) => change({ ...form, dp_amount: event.target.value })}
+          error={errors.amount}
+          hint={Number(form.dp_amount) > 0 ? formatRupiah(form.dp_amount) : undefined}
+        />
+        <Select
+          label="Metode DP"
+          options={[{ value: '', label: 'Tanpa DP' }, ...METHOD_OPTIONS]}
+          value={form.dp_method}
+          onChange={(event) => change({ ...form, dp_method: event.target.value, dp_reference: '' })}
+          error={errors.method}
+        />
+      </div>
+
+      {nonCash && (
+        <Input
+          label="Referensi Transfer/QRIS *"
+          placeholder="Contoh: kode transaksi di mutasi bank"
           maxLength={100}
           autoComplete="off"
-          value={form.customer_name}
-          onChange={(event) => change({ ...form, customer_name: event.target.value })}
-          error={errors.customer_name}
+          value={form.dp_reference}
+          onChange={(event) => change({ ...form, dp_reference: event.target.value })}
+          error={errors.reference}
+          hint="Wajib untuk DP nontunai dan tidak boleh sama dengan pembayaran lain."
         />
+      )}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            label="Tanggal Janji *"
-            type="date"
-            min={today}
-            value={form.date}
-            onChange={(event) => {
-              const date = event.target.value
-              // Jam yang sudah lewat untuk tanggal baru dikosongkan.
-              const time = availableSlots(date, today).includes(form.time) ? form.time : ''
-              change({ ...form, date, time })
-            }}
-            error={errors.date}
-          />
-          <Select
-            label="Jam Janji *"
-            placeholder={slots.length ? 'Pilih jam' : 'Tidak ada jam tersisa hari ini'}
-            options={slots.map((slot) => ({ value: slot, label: `${slot} WIB` }))}
-            value={form.time}
-            onChange={(event) => change({ ...form, time: event.target.value })}
-            error={errors.time}
-          />
-        </div>
-
-        {withPackage ? (
-          <div className="space-y-4 rounded-2xl border border-slate-200 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-slate-700">Paket (opsional)</p>
-              <Button variant="ghost" size="sm" onClick={() => togglePackage(false)}>
-                <X aria-hidden="true" className="h-3.5 w-3.5" /> Kosongkan paket
-              </Button>
-            </div>
-            <PackageFields catalog={catalog} value={form} onChange={change} errors={errors} optional />
-            {pkg && <EstimateBox pkg={pkg} persons={form.persons} />}
-          </div>
-        ) : (
-          <Button variant="soft" size="sm" onClick={() => togglePackage(true)}>
-            <Plus aria-hidden="true" className="h-3.5 w-3.5" /> Pilih paket sekarang (opsional)
-          </Button>
-        )}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            label="Nominal DP (Rp)"
-            type="number"
-            inputMode="numeric"
-            min="1"
-            step="1"
-            placeholder="Kosongkan bila tanpa DP"
-            value={form.dp_amount}
-            onChange={(event) => change({ ...form, dp_amount: event.target.value })}
-            error={errors.amount}
-            hint={Number(form.dp_amount) > 0 ? formatRupiah(form.dp_amount) : undefined}
-          />
-          <Select
-            label="Metode DP"
-            placeholder="Tanpa DP"
-            options={METHOD_OPTIONS}
-            value={form.dp_method}
-            onChange={(event) => change({ ...form, dp_method: event.target.value, dp_reference: '' })}
-            error={errors.method}
-          />
-        </div>
-
-        {nonCash && (
-          <Input
-            label="Referensi Transfer/QRIS *"
-            placeholder="Contoh: kode transaksi di mutasi bank"
-            maxLength={100}
-            autoComplete="off"
-            value={form.dp_reference}
-            onChange={(event) => change({ ...form, dp_reference: event.target.value })}
-            error={errors.reference}
-            hint="Wajib untuk DP nontunai dan tidak boleh sama dengan pembayaran lain."
-          />
-        )}
-
-        <Button type="submit" size="lg" className="w-full" loading={saving}>
-          Simpan &amp; Jadwalkan Reservasi <ArrowRight aria-hidden="true" className="h-4 w-4" />
-        </Button>
-      </form>
-    </Card>
+      <Button type="submit" size="lg" className="w-full" loading={saving}>
+        <CalendarCheck aria-hidden="true" className="h-4 w-4" /> Simpan &amp; Jadwalkan Reservasi
+      </Button>
+    </form>
   )
 }

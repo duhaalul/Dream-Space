@@ -7,7 +7,6 @@ export const REPORT_CODES = {
   sales: 'L-01 Penjualan',
   packages: 'L-02 Penjualan per paket',
   cash: 'L-03 Penerimaan uang',
-  visits: 'L-04 Rekap kunjungan',
 }
 
 export const getDashboard = (params) => api.get('/dashboard', { query: params })

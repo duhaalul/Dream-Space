@@ -126,7 +126,7 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         code="T-02"
-        description="Ringkasan penjualan, sesi selesai, penerimaan kasir, dan performa paket."
+        description="Ringkasan penjualan, transaksi lunas, penerimaan kasir, dan performa paket."
         actions={
           <PeriodFilter
             period={period}
@@ -158,12 +158,12 @@ export default function DashboardPage() {
             tone="brand"
           />
           <StatCard
-            label="Sesi Selesai"
-            value={`${Number(dashboard?.sessions ?? 0)} Sesi`}
+            label="Transaksi Lunas"
+            value={`${Number(dashboard?.sessions ?? 0)} Transaksi`}
             hint={
               totalPersonsServed > 0
                 ? `${totalPersonsServed} pelanggan terlayani`
-                : 'Belum ada sesi selesai'
+                : 'Belum ada transaksi'
             }
             icon={Camera}
             tone="green"
@@ -180,8 +180,8 @@ export default function DashboardPage() {
             value={topPackage ? topPackage.name : 'Belum ada'}
             hint={
               topPackage
-                ? `${topPackage.sessions} sesi selesai · ${formatRupiah(topPackage.sales)}`
-                : 'Belum ada sesi selesai pada periode ini'
+                ? `${topPackage.sessions} transaksi · ${formatRupiah(topPackage.sales)}`
+                : 'Belum ada transaksi pada periode ini'
             }
             icon={Award}
             tone="brand"
@@ -229,7 +229,7 @@ export default function DashboardPage() {
         {/* Urutan Performa Paket */}
         <Card
           title={period === 'today' ? 'Paket Terlaris Hari Ini' : 'Urutan Performa Paket'}
-          description="Urutan berdasarkan performa penjualan dan sesi selesai"
+          description="Urutan berdasarkan penjualan (transaksi lunas)"
         >
           {loading ? (
             <div className="space-y-3">
@@ -275,7 +275,7 @@ export default function DashboardPage() {
                       <div className="min-w-0">
                         <p className="truncate font-bold text-slate-800">{pkg.name}</p>
                         <p className="text-xs text-slate-500">
-                          {sessionsCount} Sesi Selesai
+                          {sessionsCount} Transaksi
                         </p>
                       </div>
                     </div>

@@ -5,19 +5,16 @@ import { FIELD_CLASS } from '@/shared/components/ui/fieldClass'
 import { VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from '@/shared/utils/constants'
 import { formatRupiah, formatTime } from '@/shared/utils/format'
 
+// "Paket · 3 org · 10.25" (selesai) / "Paket · 10.25" (batal)
 function meta(row, pkg) {
-  const parts = [pkg?.name ?? 'Tanpa paket']
-  if (row.status === 'SELESAI') {
-    if (row.persons) parts.push(`${row.persons} org`)
-    parts.push(formatTime(row.finished_at))
-  } else {
-    parts.push(`Batal sebelum foto · ${formatTime(row.updated_at)}`)
-  }
+  const parts = [pkg?.name ?? '-']
+  if (row.status === 'SELESAI' && row.persons) parts.push(`${row.persons} org`)
+  parts.push(formatTime(row.finished_at ?? row.updated_at))
   return parts.join(' · ')
 }
 
-// "Daftar Transaksi Selesai & Dibatalkan" (desain 06). Klik baris → detail transaksi.
-export default function HistoryList({ rows, packages, search, onSearch, onOpen, loading, correctionCount }) {
+// Daftar sesi Selesai & Dibatalkan + pencarian. Klik baris → detail.
+export default function HistoryList({ rows, packages, search, onSearch, onOpen, loading }) {
   const keyword = search.trim().toLowerCase()
   const shown = rows.filter((row) => {
     if (!keyword) return true
@@ -27,13 +24,13 @@ export default function HistoryList({ rows, packages, search, onSearch, onOpen, 
   })
 
   return (
-    <Card title="Daftar Transaksi Selesai & Dibatalkan">
+    <Card>
       <div className="relative mb-2">
         <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
           type="search"
-          aria-label="Cari transaksi"
-          placeholder="Cari no antrean, nama, atau paket…"
+          aria-label="Cari"
+          placeholder="Cari nomor, nama, atau paket…"
           value={search}
           onChange={(event) => onSearch(event.target.value)}
           className={`${FIELD_CLASS} border-slate-200 pl-10`}
@@ -41,7 +38,7 @@ export default function HistoryList({ rows, packages, search, onSearch, onOpen, 
       </div>
 
       {loading ? (
-        <p className="py-4 text-sm text-slate-500">Memuat riwayat…</p>
+        <p className="py-4 text-sm text-slate-500">Memuat…</p>
       ) : shown.length ? (
         <ul className="divide-y divide-slate-100">
           {shown.map((row) => (
@@ -57,16 +54,15 @@ export default function HistoryList({ rows, packages, search, onSearch, onOpen, 
                   <span className="block truncate text-xs text-slate-500">{meta(row, packages.get(row.package_id))}</span>
                 </span>
                 <span className="text-right font-bold text-slate-800">{formatRupiah(row.total)}</span>
-                <span className="col-start-3 flex flex-col items-end gap-1 sm:col-start-auto">
+                <span className="col-start-3 justify-self-end sm:col-start-auto">
                   <Badge tone={VISIT_STATUS_TONES[row.status]}>{VISIT_STATUS_LABELS[row.status]}</Badge>
-                  {correctionCount(row) > 0 && <span className="text-[11px] text-slate-500">{correctionCount(row)}× dikoreksi</span>}
                 </span>
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="py-4 text-sm text-slate-500">{keyword ? 'Tidak ada transaksi yang cocok.' : 'Belum ada transaksi selesai atau dibatalkan pada periode ini.'}</p>
+        <p className="py-4 text-sm text-slate-500">{keyword ? 'Tidak ada yang cocok.' : 'Belum ada sesi pada periode ini.'}</p>
       )}
     </Card>
   )

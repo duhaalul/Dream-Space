@@ -3,9 +3,13 @@ import { ChevronDown } from 'lucide-react'
 import { FIELD_CLASS } from './fieldClass'
 
 // options: [{ value, label }]
+// placeholder: teks samar saat belum memilih (bukan pilihan di daftar). Bila "kosong" memang
+// pilihan yang sah (mis. "Tanpa DP"), masukkan sebagai option biasa dengan value ''.
 export default function Select({ label, error, options = [], placeholder, className = '', id, ...props }) {
   const generatedId = useId()
   const selectId = id ?? generatedId
+  const empty = Boolean(placeholder) && props.value === ''
+  const fieldClass = empty ? FIELD_CLASS.replace('text-slate-800', 'text-slate-400') : FIELD_CLASS
 
   return (
     <div className={className}>
@@ -18,12 +22,16 @@ export default function Select({ label, error, options = [], placeholder, classN
         <select
           id={selectId}
           aria-invalid={error ? true : undefined}
-          className={`${FIELD_CLASS} appearance-none pr-10 ${error ? 'border-red-300' : 'border-slate-200'}`}
+          className={`${fieldClass} appearance-none pr-10 ${error ? 'border-red-300' : 'border-slate-200'}`}
           {...props}
         >
-          {placeholder && <option value="">{placeholder}</option>}
+          {placeholder && (
+            <option value="" disabled hidden>
+              {placeholder}
+            </option>
+          )}
           {options.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option key={option.value} value={option.value} className="text-slate-800">
               {option.label}
             </option>
           ))}

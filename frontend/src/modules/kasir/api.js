@@ -1,37 +1,23 @@
-// Modul Kasir dan Pembayaran — docs/API.md bagian Kasir.
-// Pembayaran/refund wajib membawa client_request_id dari newRequestId().
+// Modul Pendaftaran & Riwayat (menu "Pendaftaran" = daftar + bayar lunas di awal) — docs/API.md.
+// Pembayaran wajib membawa client_request_id dari newRequestId().
 import { api } from '@/shared/api/client'
 
-// Rincian tagihan memakai detail kunjungan:
-// → { visit, transaction, balance: { paid, refunded, net, due, surplus }, items, payments, refunds, events }
-export const getCashierDetail = (visitId) => api.get(`/visits/${visitId}`)
+// Pelanggan datang langsung: daftar + tambahan + bayar LUNAS dalam satu permintaan.
+// data: { client_request_id, customer_name, package_id, background_id, persons,
+//         addons: [{ addon_id, qty }], payment: { client_request_id, method, amount, reference } }
+// Tunai: amount = uang yang diserahkan (kembalian dihitung backend). Kurang bayar → PAYMENT_NOT_SETTLED.
+// → { visit, transaction, balance, items, payments, refunds, events }
+export const registerWalkIn = (data) => api.post('/visits/walk-in', data)
 
-// Daftar pelanggan aktif di Kasir (belum Selesai/Dibatalkan).
-// params: { date, page, search }
-export const getActiveVisits = (params) => api.get('/visits', { query: { ...params, history: 'false' } })
+// Detail satu kunjungan/transaksi (Riwayat).
+export const getTransactionDetail = (visitId) => api.get(`/visits/${visitId}`)
 
-// Riwayat transaksi (T-06): hanya kunjungan Selesai dan Dibatalkan.
-// params: { page, search, from, to }
+// Riwayat (T-06): sesi Selesai dan Dibatalkan. params: { page, search, from, to }
 export const getHistory = (params) => api.get('/visits', { query: { ...params, history: 'true' } })
 
-// data: { version, addons: [{ addon_id, qty }], reason }
-export const setTransactionAddons = (transactionId, data) => api.put(`/transactions/${transactionId}/addons`, data)
-
-// data: { client_request_id, payment_type, method, amount, reference?, paid_at? }
-// Tunai: amount = uang yang diserahkan; backend menghitung kembalian.
-export const addPayment = (transactionId, data) => api.post(`/transactions/${transactionId}/payments`, data)
-
-// data: { client_request_id, amount, method, reason }
-export const addRefund = (transactionId, data) => api.post(`/transactions/${transactionId}/refunds`, data)
-
-// data: { version, reason, customer_name?, payments?, items?, payment?, refund? }
-export const addCorrection = (transactionId, data) => api.post(`/transactions/${transactionId}/corrections`, data)
-
-export const getAudit = (transactionId) => api.get(`/transactions/${transactionId}/audit`)
-
-// Konfirmasi akhir sesi + pelunasan (atomik).
-// data: { version, transaction_version, persons, addons, reason?, payment?, refund? }
-export const finishVisit = (visitId, data) => api.post(`/visits/${visitId}/finish`, data)
-
-// Nota PDF, hanya setelah Selesai. Pakai openBlob() untuk mencetak.
+// Nota PDF, tersedia sejak transaksi lunas. Pakai openBlob() untuk mencetak.
 export const downloadReceipt = (transactionId) => api.download(`/transactions/${transactionId}/receipt.pdf`)
+
+// Pembayaran terpisah (belum dipakai tampilan; disiapkan untuk pelunasan reservasi nanti).
+// data: { client_request_id, payment_type, method, amount, reference? }
+export const addPayment = (transactionId, data) => api.post(`/transactions/${transactionId}/payments`, data)

@@ -71,7 +71,7 @@ export function personLimits(pkg, background) {
 export function capacityInfo(pkg, background) {
   if (!pkg) return null
   const { min, max } = personLimits(pkg, background)
-  let limitText = 'Tanpa batas jumlah orang'
+  let limitText = 'Tanpa batas orang'
   if (max !== null) limitText = min > 1 ? `${min}–${max} orang` : `Maks ${max} orang`
   else if (min > 1) limitText = `Minimal ${min} orang`
   return {
@@ -148,6 +148,8 @@ const FIELD_BY_CODE = {
   DUPLICATE_VALUE: 'reference',
   EXCESS_NONCASH: 'amount',
   AMOUNT_LIMIT: 'amount',
+  PAYMENT_NOT_SETTLED: 'amount',
+  PAYMENT_REQUIRED: 'amount',
 }
 
 const MESSAGE_BY_CODE = {

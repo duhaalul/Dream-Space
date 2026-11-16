@@ -1,39 +1,8 @@
-import { UsersRound } from 'lucide-react'
-import { Badge, Input, Select } from '@/shared/components/ui'
-import {
-  activeBackgrounds,
-  activePackages,
-  backgroundLabel,
-  capacityInfo,
-  packageLabel,
-} from '../visitForm'
+import { Input, Select } from '@/shared/components/ui'
+import { activeBackgrounds, activePackages, backgroundLabel, packageLabel } from '../visitForm'
 
-// "Kapasitas Ruangan" hanya informasi: sengaja tanpa kotak/garis kolom isian
-// supaya tidak dikira bisa diisi. Tinggi baris isi disamakan dengan kotak input
-// agar sejajar dengan Jumlah Orang.
-function CapacityInfo({ info }) {
-  return (
-    <div>
-      <p className="mb-1.5 text-sm text-slate-500">Kapasitas Ruangan</p>
-      <div className="flex min-h-11.5 flex-col justify-center">
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <UsersRound aria-hidden="true" className={`h-4 w-4 shrink-0 ${info ? 'text-brand-500' : 'text-slate-400'}`} />
-          <span className={`text-sm ${info ? 'font-semibold text-slate-700' : 'text-slate-400'}`}>
-            {info ? info.limitText : 'Pilih paket dulu'}
-          </span>
-          {info && (
-            <Badge tone={info.isOpen ? 'green' : 'red'} className="px-2.5 py-0.5">
-              {info.isOpen ? 'Buka' : 'Ditutup'}
-            </Badge>
-          )}
-        </div>
-        {info && <p className="mt-0.5 pl-6.5 text-xs text-slate-500">{info.sourceText}</p>}
-      </div>
-    </div>
-  )
-}
-
-// Kolom Pilihan Paket, Latar, Jumlah Orang, dan Kapasitas Ruangan.
+// Kolom Pilihan Paket, Latar, dan Jumlah Orang (sejajar 3 kolom; di HP bertumpuk).
+// Info kapasitas/durasi/urutan ditampilkan terpisah (kasir/components/PackageSummary).
 // Dipakai form datang langsung (wajib) dan reservasi (optional: paket boleh menyusul).
 // value: { package_id, background_id, persons } (string), errors: { package_id, background_id, persons }
 export default function PackageFields({ catalog, value, onChange, errors = {}, optional = false, disabled = false }) {
@@ -41,7 +10,6 @@ export default function PackageFields({ catalog, value, onChange, errors = {}, o
   const packages = activePackages(catalog.packages)
   const pkg = catalog.packages.find((item) => String(item.id) === String(value.package_id)) ?? null
   const backgrounds = pkg ? activeBackgrounds(catalog.backgrounds, pkg.id) : []
-  const background = backgrounds.find((item) => String(item.id) === String(value.background_id)) ?? null
 
   function changePackage(packageId) {
     const options = packageId ? activeBackgrounds(catalog.backgrounds, packageId) : []
@@ -63,7 +31,7 @@ export default function PackageFields({ catalog, value, onChange, errors = {}, o
   else if (backgrounds.length === 0) backgroundPlaceholder = 'Tanpa pilihan latar'
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
       <Select
         label={`Pilihan Paket${star}`}
         placeholder={optional ? 'Belum dipilih (bisa menyusul)' : 'Pilih paket'}
@@ -94,7 +62,6 @@ export default function PackageFields({ catalog, value, onChange, errors = {}, o
         error={errors.persons}
         disabled={disabled || !pkg}
       />
-      <CapacityInfo info={capacityInfo(pkg, background)} />
     </div>
   )
 }

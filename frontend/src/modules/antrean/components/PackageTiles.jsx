@@ -1,3 +1,5 @@
+import SessionTimer from './SessionTimer'
+
 // Deretan kartu paket di atas papan (desain: RG Reguler · Dipakai, WD · Kosong, PB · Ditutup).
 // rooms: hasil buildBoard(); selectedId: id paket terpilih.
 function roomState(room) {
@@ -41,7 +43,10 @@ export default function PackageTiles({ rooms, selectedId, onSelect }) {
             <p className={`text-2xl font-black ${selected || !room.isOpen ? '' : 'text-brand-500'}`}>{room.pkg.queue_code}</p>
             <p className="mt-0.5 truncate text-sm font-semibold">{room.pkg.name}</p>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <span className={`text-xs ${selected ? 'text-white/80' : 'text-slate-500'}`}>{summary}</span>
+              <span className={`flex min-w-0 items-center gap-1.5 text-xs ${selected ? 'text-white/80' : 'text-slate-500'}`}>
+                {summary}
+                {room.inRoom && <SessionTimer visit={room.inRoom} className="px-2" />}
+              </span>
               <span
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${
                   selected ? 'bg-white text-brand-600' : STATE_PILL[state.tone]

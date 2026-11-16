@@ -1,155 +1,107 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { getPackages } from '@/modules/paket/api'
+import { Printer, XCircle } from 'lucide-react'
+import { downloadReceipt } from '@/modules/kasir/api'
 import { Alert, Badge, Button, Modal } from '@/shared/components/ui'
-import { PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES, VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from '@/shared/utils/constants'
-import { formatDate, formatDateTime, formatRupiah } from '@/shared/utils/format'
+import { PAYMENT_METHOD_LABELS, VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from '@/shared/utils/constants'
+import { openBlob } from '@/shared/utils/download'
+import { formatRupiah, formatTime } from '@/shared/utils/format'
 import { getVisit } from '../api'
-import { customerTypeLabel, queueLabel } from '../queue'
-import EditSelectionForm from './EditSelectionForm'
-import RenameForm from './RenameForm'
-import VisitTimeline from './VisitTimeline'
+import { queueLabel } from '../queue'
 
-const ACTIVE = ['RESERVASI', 'MENUNGGU', 'DIPANGGIL', 'SEDANG_DILAYANI', 'DILEWATI']
-const EDITABLE = ['RESERVASI', 'MENUNGGU'] // paket/latar/jumlah orang hanya sebelum dipanggil
+const ACTIVE = ['MENUNGGU', 'DIPANGGIL', 'DILEWATI']
 
-function Info({ label, children }) {
+function Row({ label, children }) {
   return (
-    <div>
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="text-sm font-medium text-slate-800">{children}</dd>
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <dt className="shrink-0 text-slate-500">{label}</dt>
+      <dd className="min-w-0 text-right text-slate-800">{children}</dd>
     </div>
   )
 }
 
-// Detail kunjungan (dibuka dari tombol "Detail" di Per Paket/Ringkasan).
-// Admin: ubah paket/latar/jumlah orang, koreksi nama, batalkan. Owner: hanya melihat.
-// Pasang dengan key = visitId. onChanged() memuat ulang papan; onCancelVisit(visit)
-// menutup modal ini lalu membuka dialog alasan batal milik papan.
-export default function VisitDetailModal({ visitId, isAdmin, onClose, onChanged, onCancelVisit }) {
-  const navigate = useNavigate()
+// Detail kunjungan (tombol "Detail" di Antrean): ringkas, hanya yang penting.
+// Admin bisa membatalkan (sebelum foto). onCancelVisit(visit) menutup modal lalu membuka dialog alasan.
+export default function VisitDetailModal({ visitId, isAdmin, onClose, onCancelVisit }) {
   const [detail, setDetail] = useState(null)
-  const [catalog, setCatalog] = useState(null)
-  const [loadError, setLoadError] = useState(null)
-  const [mode, setMode] = useState(null) // 'edit' | 'rename'
-  const [notice, setNotice] = useState(null)
+  const [error, setError] = useState(null)
+  const [printing, setPrinting] = useState(false)
 
   useEffect(() => {
-    Promise.all([getVisit(visitId), getPackages()])
-      .then(([visitDetail, packages]) => {
-        setDetail(visitDetail)
-        setCatalog({ packages: packages?.packages ?? [], backgrounds: packages?.backgrounds ?? [] })
-      })
-      .catch(setLoadError)
+    getVisit(visitId).then(setDetail).catch(setError)
   }, [visitId])
 
-  function saved(next, message) {
-    setDetail(next)
-    setMode(null)
-    setNotice(message)
-    onChanged?.()
+  async function print() {
+    setPrinting(true)
+    try {
+      openBlob(await downloadReceipt(detail.transaction.id))
+    } catch (err) {
+      setError(err)
+    } finally {
+      setPrinting(false)
+    }
   }
 
-  let body
-  if (loadError) {
-    body = (
-      <Alert variant="error" requestId={loadError.requestId}>
-        Detail gagal dimuat. {loadError.message}
-      </Alert>
-    )
-  } else if (!detail || !catalog) {
-    body = <p className="text-sm text-slate-500">Memuat detail…</p>
-  } else {
-    const { visit, transaction, balance, events } = detail
-    const pkg = catalog.packages.find((item) => item.id === visit.package_id)
-    const background = catalog.backgrounds.find((item) => item.id === visit.background_id)?.name ?? transaction.background_snapshot
-    const active = ACTIVE.includes(visit.status)
-    const unallocated = transaction.price_type_snapshot === null
+  let body = <p className="text-sm text-slate-500">Memuat…</p>
+  let footer = null
+  if (detail) {
+    const { visit, transaction, balance, items, payments } = detail
+    const active = items.filter((item) => Number(item.is_active) === 1)
+    const pkgName = active.find((item) => item.item_type === 'PAKET')?.description
+    const addons = active.filter((item) => item.item_type === 'TAMBAHAN').map((item) => `${item.description} ×${item.qty}`)
+    const methods = [...new Set(payments.map((payment) => PAYMENT_METHOD_LABELS[payment.method]))].join(', ')
+    const paid = Boolean(transaction.paid_off_at)
 
     body = (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-lg font-bold text-slate-800">{visit.customer_name}</p>
-          <Badge tone={VISIT_STATUS_TONES[visit.status]}>{VISIT_STATUS_LABELS[visit.status]}</Badge>
           {queueLabel(visit) && <Badge tone="gray">{queueLabel(visit)}</Badge>}
+          <Badge tone={VISIT_STATUS_TONES[visit.status]}>{VISIT_STATUS_LABELS[visit.status]}</Badge>
         </div>
-        {notice && <Alert variant="success">{notice}</Alert>}
-
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-          <Info label="Jenis">{customerTypeLabel(visit)}</Info>
-          <Info label="Tanggal layanan">{formatDate(visit.service_date)}</Info>
-          {visit.appointment_at && <Info label="Jam janji">{formatDateTime(visit.appointment_at)} WIB</Info>}
-          <Info label="Paket">{pkg ? `${pkg.name} (${pkg.queue_code})` : 'Belum dipilih'}</Info>
-          <Info label="Latar">{background ?? '-'}</Info>
-          <Info label="Jumlah orang">{visit.persons ? `${visit.persons} orang` : '-'}</Info>
-          <Info label="No. transaksi">{transaction.transaction_no}</Info>
-          {visit.cancel_reason && <Info label="Alasan batal">{visit.cancel_reason}</Info>}
-          {visit.note && <Info label="Catatan">{visit.note}</Info>}
+        {error && (
+          <Alert variant="error" requestId={error.requestId}>
+            {error.message}
+          </Alert>
+        )}
+        <dl className="space-y-2.5">
+          <Row label="Paket">{[pkgName ?? '-', transaction.background_snapshot, visit.persons && `${visit.persons} orang`].filter(Boolean).join(' · ')}</Row>
+          {addons.length > 0 && <Row label="Tambahan">{addons.join(', ')}</Row>}
+          <Row label="Pembayaran">
+            {paid ? `Lunas ${formatRupiah(transaction.total)}${methods ? ` · ${methods}` : ''}` : `Belum lunas · sisa ${formatRupiah(balance.due)}`}
+          </Row>
+          <Row label="Daftar">{formatTime(visit.created_at)}</Row>
+          {visit.cancel_reason && <Row label="Alasan batal">{visit.cancel_reason}</Row>}
         </dl>
-
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-          <span>
-            Total <strong>{unallocated ? '-' : formatRupiah(transaction.total)}</strong>
-          </span>
-          <span>
-            Sudah dibayar <strong className="text-emerald-700">{formatRupiah(balance.net)}</strong>
-          </span>
-          {!unallocated && balance.due > 0 && (
-            <span>
-              Sisa <strong className="text-amber-700">{formatRupiah(balance.due)}</strong>
-            </span>
-          )}
-          <Badge tone={PAYMENT_STATUS_TONES[transaction.payment_status] ?? 'gray'}>
-            {PAYMENT_STATUS_LABELS[transaction.payment_status] ?? transaction.payment_status}
-          </Badge>
-        </div>
-
-        {isAdmin && active && mode === null && (
-          <div className="flex flex-wrap gap-2">
-            {EDITABLE.includes(visit.status) && (
-              <Button size="sm" variant="soft" onClick={() => setMode('edit')}>
-                {visit.package_id ? 'Ubah Paket/Latar/Jumlah Orang' : 'Lengkapi Paket'}
-              </Button>
-            )}
-            <Button size="sm" variant="soft" onClick={() => setMode('rename')}>
-              Koreksi Nama
-            </Button>
-            <Button size="sm" variant="neutral" onClick={() => navigate(`/kasir/${visit.id}`)}>
-              Buka Kasir
-            </Button>
-            {visit.status !== 'SEDANG_DILAYANI' && (
-              <Button size="sm" variant="danger" onClick={() => onCancelVisit(visit)}>
-                Batalkan Kunjungan
-              </Button>
-            )}
-          </div>
-        )}
-        {isAdmin && active && !EDITABLE.includes(visit.status) && mode === null && (
-          <p className="-mt-3 text-xs text-slate-500">Paket, latar, dan jumlah orang hanya bisa diubah sebelum dipanggil.</p>
-        )}
-
-        {mode === 'edit' && (
-          <EditSelectionForm
-            detail={detail}
-            catalog={catalog}
-            onCancel={() => setMode(null)}
-            onSaved={(next) => saved(next, 'Paket, latar, dan jumlah orang tersimpan. Tagihan sudah diperbarui.')}
-          />
-        )}
-        {mode === 'rename' && (
-          <RenameForm detail={detail} onCancel={() => setMode(null)} onSaved={(next) => saved(next, 'Nama panggilan dikoreksi dan tercatat di riwayat koreksi.')} />
-        )}
-
-        <div>
-          <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">Riwayat Status</p>
-          <VisitTimeline events={events} />
-        </div>
       </div>
+    )
+
+    const canCancel = isAdmin && ACTIVE.includes(visit.status)
+    if (paid || canCancel) {
+      footer = (
+        <>
+          {canCancel && (
+            <Button variant="danger" onClick={() => onCancelVisit(visit)}>
+              <XCircle aria-hidden="true" className="h-4 w-4" /> Batalkan
+            </Button>
+          )}
+          {paid && (
+            <Button variant="success" loading={printing} onClick={print}>
+              {!printing && <Printer aria-hidden="true" className="h-4 w-4" />} Cetak Nota
+            </Button>
+          )}
+        </>
+      )
+    }
+  } else if (error) {
+    body = (
+      <Alert variant="error" requestId={error.requestId}>
+        {error.message}
+      </Alert>
     )
   }
 
   return (
-    <Modal open size="lg" title="Detail Kunjungan" onClose={onClose}>
+    <Modal open title="Detail" onClose={onClose} footer={footer}>
       {body}
     </Modal>
   )

@@ -3,7 +3,8 @@ import { NavLink, Outlet } from 'react-router'
 import { Power } from 'lucide-react'
 import logoDs from '@/assets/logo-ds.png'
 import { useAuth } from '@/modules/akun/useAuth'
-import { ROLE_LABELS } from '@/shared/utils/constants'
+import SessionEndNotifier from '@/modules/antrean/components/SessionEndNotifier'
+import { ROLE_LABELS, ROLES } from '@/shared/utils/constants'
 import PageLoading from './PageLoading'
 import { menuFor } from './routes'
 
@@ -121,6 +122,9 @@ export default function AppLayout() {
           <Outlet />
         </Suspense>
       </main>
+
+      {/* Waktu sesi foto habis → notifikasi kecil di kanan bawah (Admin, semua halaman). */}
+      {user.role === ROLES.ADMIN && !user.must_change_password && <SessionEndNotifier />}
     </div>
   )
 }

@@ -19,5 +19,5 @@ export const createVisit = (data) => api.post('/visits', data)
 export const updateVisitSelection = (id, data) => api.put(`/visits/${id}/selection`, data)
 
 // Admin. data: { version, action, reason?, priority? }
-// action: CONFIRM | CALL | START | SKIP | RETURN | CANCEL (lihat VISIT_ACTIONS)
+// action: CONFIRM | CALL | START | SKIP | RETURN | CANCEL | FINISH (lihat VISIT_ACTIONS)
 export const runVisitAction = (id, data) => api.post(`/visits/${id}/actions`, data)

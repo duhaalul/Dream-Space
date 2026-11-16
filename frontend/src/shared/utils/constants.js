@@ -12,7 +12,7 @@ export const ROLE_LABELS = {
 
 // Halaman awal setelah login.
 export const HOME_BY_ROLE = {
-  ADMIN: '/antrean',
+  ADMIN: '/pendaftaran',
   OWNER: '/dashboard',
 }
 
@@ -44,6 +44,7 @@ export const VISIT_ACTIONS = {
   SKIP: 'SKIP', // Lewati
   RETURN: 'RETURN', // Kembalikan ke antrean
   CANCEL: 'CANCEL', // Batalkan
+  FINISH: 'FINISH', // Selesai (sesi foto selesai; tagihan sudah lunas saat mendaftar)
 }
 
 export const CUSTOMER_TYPES = {
@@ -82,7 +83,7 @@ export const PAYMENT_STATUS_TONES = {
 export const PRICE_TYPE_LABELS = {
   PER_SESI: 'Per sesi',
   PER_ORANG: 'Per orang',
-  PER_KELOMPOK: 'Harga untuk sejumlah orang',
+  PER_KELOMPOK: 'Per kelompok',
 }
 
 export const REPORT_PERIODS = {

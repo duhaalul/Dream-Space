@@ -15,8 +15,8 @@ FR-02, FR-03 · UC-03, UC-04, UC-05, UC-06.
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
 | `pages/PackagesPage.jsx` | Paket (Admin) / Kelola Paket (Owner) | Admin lihat, Owner kelola | Selesai |
-| `components/PackageForm.jsx` | Kelola Paket › Pengaturan Skema Harga & Kapasitas Paket | Owner | Selesai |
-| `components/AddonManager.jsx` | Kelola Paket › Tambahan layanan (dulu di Pengaturan) | Owner | Selesai |
+| `components/PackageForm.jsx` | Pop-up tambah/ubah paket: Info Paket, Pilihan Latar, Tambahan Tersedia, **satu tombol Simpan** | Owner | Selesai |
+| `components/AddonManager.jsx` | Tambahan Layanan (tetap di halaman, bukan pop-up): tambah, Ubah, Hapus | Owner | Selesai |
 | `components/RoomAvailabilityToggle.jsx` | Antrean › tombol tutup/buka ruangan | Admin | Selesai (Ihsan) |
 
 ## Hak akses
@@ -34,37 +34,42 @@ FR-02, FR-03 · UC-03, UC-04, UC-05, UC-06.
 | `createPackage(data)` / `updatePackage(id, data)` | `POST /packages` / `PUT /packages/:id` | Simpan paket (PUT = body lengkap) |
 | `createBackground(packageId, data)` / `updateBackground(id, data)` | `POST /packages/:id/backgrounds` / `PUT /backgrounds/:id` | Latar: `{ name, max_persons, is_active }` |
 | `setPackageAddons(packageId, addonIds)` | `PUT /packages/:id/addons` | Centang tambahan yang tersedia (mengganti seluruh daftar) |
-| `createAddon(data)` / `updateAddon(id, data)` | `POST /addons` / `PUT /addons/:id` | Tambahan: `{ name, price, unit, is_active }` |
+| `createAddon(data)` / `updateAddon(id, data)` | `POST /addons` / `PUT /addons/:id` | Tambahan: `{ name, price, unit, extra_minutes, is_active }` |
+| `deleteAddon(id)` | `DELETE /addons/:id` | Hapus tambahan → `{ id, archived }`; 409 `ADDON_IN_USE` bila masih dipakai paket |
 | `setPackageAvailability(id, isOpen, reason)` | `PATCH /packages/:id/availability` | Tutup/buka ruangan (Admin) |
+| `createPackageSetup(data)` / `updatePackageSetup(id, data)` | `POST /packages/setup` / `PUT /packages/:id/setup` | Pop-up: `{ package, backgrounds: [{ id?, name, max_persons, is_active }], addon_ids }` disimpan sekaligus (satu transaksi) |
 
 Contoh body paket:
 ```json
 {
   "name": "Reguler", "queue_code": "RG", "price_type": "PER_KELOMPOK",
   "price": 80000, "included_persons": 4, "extra_person_price": 15000,
-  "min_persons": 1, "max_persons": 10,
-  "description": "Durasi dan fasilitas ditulis Owner", "is_active": true
+  "min_persons": 1, "max_persons": 10, "duration_minutes": 15,
+  "description": "Fasilitas ditulis Owner", "is_active": true
 }
 ```
 
 ## Aturan wajib
-- **Tidak ada hapus.** Paket, latar, dan tambahan dinonaktifkan (`is_active: false`). Paket nonaktif tidak muncul di pendaftaran baru.
+- **Durasi Sesi** (`duration_minutes`, wajib di form, 1–600 menit) dipakai timer di Antrean saat Mulai Foto. Tambahan berisi **Nama** (huruf pertama otomatis kapital), **Harga**, dan **Per [jumlah] [satuan]** (satuan diketik bebas). Disimpan sebagai `unit` = "5 menit" (atau cukup "lembar" bila jumlah 1). Bila satuannya `menit`/`mnt` (atau `jam` ×60), `extra_minutes` otomatis terisi sehingga menambah timer sesi; satuan lain → `null`.
+- Tambah/ubah paket lewat **pop-up** dengan **satu tombol Simpan**. Semua bagian dikirim sekaligus (`createPackageSetup`/`updatePackageSetup`), jadi tidak ada paket yang tersimpan setengah. Hanya latar baru dan latar lama yang berubah yang dikirim.
+- Paket dan latar **tidak dihapus**, cukup dinonaktifkan (`is_active: false`); paket nonaktif tidak muncul di pendaftaran baru.
+- Tambahan layanan **tanpa** aktif/nonaktif: cukup **Ubah** dan **Hapus** (dengan konfirmasi). Tambahan yang **masih tercentang di paket** tidak bisa dihapus: muncul peringatan "… belum bisa dihapus" berisi nama paketnya (backend: `ADDON_IN_USE`). Tambahan yang sudah pernah dipakai transaksi diarsipkan oleh backend (disembunyikan, riwayat tetap utuh).
 - Cara hitung harga (`price_type`):
   - `PER_SESI`: harga tetap per sesi;
   - `PER_ORANG`: harga × jumlah orang, tanpa `included_persons`/`extra_person_price`;
   - `PER_KELOMPOK`: harga untuk `included_persons` orang (wajib) + `extra_person_price` per orang tambahan.
 - Kode antrean: huruf kapital/angka, diawali huruf, maksimal 10 karakter (mis. `RG` → nomor `RG-001`).
 - Kapasitas minimal/maksimal orang boleh kosong. Latar punya batas orangnya sendiri.
-- Tampilkan **pratinjau harga** sebelum disimpan.
+- Tampilkan **pratinjau harga** sebelum disimpan (satu baris "Contoh N orang = RpX").
 - Perubahan harga tidak mengubah transaksi yang sudah tercatat (backend menyimpan harga saat pendaftaran).
-- Tambahan layanan berisi nama, harga, dan satuan, mis. "Tambah waktu Rp20.000 per 5 menit".
+- Contoh tambahan: "Tambah waktu Rp20.000 / 5 menit" (menambah timer 5 menit per jumlah), "Tambah cetak 4R Rp15.000 / lembar".
 - Menutup ruangan wajib alasan, dan tidak bisa saat ada pelanggan dipanggil atau sedang foto.
 
 ## Error yang ditangani khusus
 | Kode | Tindakan di tampilan |
 |---|---|
-| `DUPLICATE_VALUE` (409) | Kode/nama sudah dipakai; tandai kolom kode/nama |
-| `VALIDATION_ERROR` (422) | `error.details` berisi daftar kolom yang salah; tampilkan di kolomnya |
+| `DUPLICATE_VALUE` (409) | Nama/kode paket atau nama latar sudah dipakai; pesan di pop-up, isian tidak hilang |
+| `VALIDATION_ERROR` (422) | `error.details[].path` (`package.price`, `backgrounds.1.name`); tampilkan di kolom/baris latarnya |
 | `REASON_REQUIRED` | Alasan menutup ruangan masih kosong |
 | `ROOM_BUSY` | Ruangan masih dipakai; belum bisa ditutup |
 

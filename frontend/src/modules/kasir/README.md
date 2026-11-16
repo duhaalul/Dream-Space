@@ -1,124 +1,87 @@
-# Modul Kasir
+# Modul Pendaftaran & Riwayat (folder `kasir`)
 
-Pegangan kerja modul **Kasir dan Pembayaran** (SRS 4.3, 5.1). Aturan umum ada di [README frontend](../../../README.md).
+Pegangan kerja menu **Pendaftaran** (daftar + bayar lunas di awal) dan **Riwayat**. Aturan umum ada di [README frontend](../../../README.md).
 
 ## Tujuan
-Menerima pembayaran, menyelesaikan sesi, mencetak nota, mengembalikan kelebihan bayar, mengoreksi transaksi, dan menampilkan riwayat transaksi.
-FR-06, FR-07, FR-09, FR-10, FR-12, FR-14 · UC-13 s.d. UC-15, UC-17 s.d. UC-20.
+- **Pendaftaran:** pelanggan datang langsung memilih paket, latar, jumlah orang, dan tambahan, lalu **membayar lunas** dan langsung masuk antrean. Nota tercetak setelah bayar.
+- **Riwayat:** daftar sesi yang sudah berakhir (Selesai & Dibatalkan), detail transaksi, dan cetak ulang nota.
 
 ## Penanggung jawab
 **Ihsan**
 
+## Alur datang langsung
+1. Admin mengisi data pelanggan dan memilih tambahan (tambah waktu/cetak) di kiri, lalu memilih metode dan nominal pembayaran di kanan.
+2. **Konfirmasi & Masuk Antrean** → satu permintaan ke backend: kunjungan dibuat, tambahan dicatat, pembayaran diterima. Kalau tidak lunas, semuanya dibatalkan.
+3. Muncul **pop-up Berhasil**: nomor antrean besar, Lunas, Kembalian, tombol **Cetak Nota** (nota tidak terbuka otomatis) dan **Pendaftaran Baru**. Penjualan dihitung **saat lunas**.
+4. Di Antrean: Panggil → Mulai Foto → **Selesai**. Sesi masuk Riwayat.
+
+Setelah lunas, paket dan tambahan **tidak bisa diubah** (backend: `PAID_LOCKED`); nanti lewat fitur koreksi.
+
 ## Halaman & komponen
-| File | Layar di Figma | Peran | Status |
-|---|---|---|---|
-| `pages/CashierPage.jsx` | Kasir (`UIUX/PNG/05_Kasir_Admin.png`): 3 kolom + tombol "+ Pelanggan Baru (Bayar Awal)" | Admin | Selesai |
-| `components/ActiveVisitList.jsx` | kolom Pelanggan Aktif + pencarian nama/nomor antrean | Admin | Selesai |
-| `components/BillDetails.jsx` | kolom Rincian Tagihan: item aktif, total, sudah dibayar, sisa/lunas/kelebihan, riwayat pembayaran | Admin | Selesai |
-| `components/SessionAdjustments.jsx` | selama sesi foto: tambahan layanan (+/−) dan jumlah orang akhir | Admin | Selesai |
-| `components/PaymentPanel.jsx` | kolom Pembayaran: Tunai/Transfer/QRIS, kembalian, refund kelebihan bayar, Selesaikan & Cetak Nota | Admin | Selesai |
-| `cashier.js` | logika: label rincian, `canReceivePayment`, `finishBlocker`, peta error | — | Selesai |
-| `pages/HistoryPage.jsx` | Riwayat (`UIUX/PNG/06_…`): filter tanggal, 4 kartu statistik, daftar, panel koreksi (Admin) | Admin; Owner lihat | Selesai |
-| `components/HistoryList.jsx` | Daftar Transaksi Selesai & Dibatalkan + pencarian | Admin; Owner lihat | Selesai |
-| `components/TransactionDetailModal.jsx` | detail transaksi, cetak ulang nota, riwayat koreksi | Admin; Owner lihat | Selesai |
-| `components/CorrectionPanel.jsx` | Koreksi Data Transaksi: nama pelanggan, metode/referensi pembayaran + alasan | Admin | Selesai |
-| `components/AuditList.jsx` | daftar koreksi (nilai lama → baru, alasan, waktu) | Admin; Owner lihat | Selesai |
+| File | Isi | Peran |
+|---|---|---|
+| `pages/RegistrationPage.jsx` | `/pendaftaran`: kartu Pelanggan (kiri) + Pembayaran (kanan); jumlah orang & uang tunai dicek langsung saat diketik; pop-up Berhasil + Cetak Nota | Admin |
+| `components/AddonPicker.jsx` | tambahan yang diizinkan paket (+/−) | Admin |
+| `components/PackageSummary.jsx` | satu baris chip setelah paket dipilih: kapasitas · durasi (paket + tambah waktu) · Urutan ke-N · kondisi ruangan | Admin |
+| `pages/HistoryPage.jsx` | `/riwayat`: filter tanggal, 3 kartu (Total Sesi, Selesai, Dibatalkan), daftar | Admin & Owner |
+| `components/HistoryList.jsx` | daftar sesi + pencarian (nomor, nama, paket, no. transaksi) | Admin & Owner |
+| `components/TransactionDetailModal.jsx` | rincian, total, pembayaran, kembalian, waktu lunas, alasan batal, Cetak Ulang Nota | Admin & Owner |
+| `cashier.js` | `PAYMENT_METHODS`, `billPreview` (perkiraan tagihan), `activeItems`, `itemLabel`, `totalChange`, `methodLabel` | — |
 
-Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
-- `Card`: tiga kolom Kasir;
-- `SegmentedControl tone="brand"`: pilihan metode Tunai/Transfer/QRIS;
-- `Button variant="primary"` (Terima Pembayaran) dan `variant="success"` (Selesaikan & Cetak Nota);
-- `StatCard` + `Table`: ringkasan dan daftar di Riwayat;
-- `Badge`: status bayar.
-
-Route: `/kasir` = daftar pelanggan aktif; `/kasir/:id` = pelanggan (kunjungan) terpilih.
+Dipakai ulang dari `antrean`: `PackageFields`, `useDayVisits`, `packageQueue`, `queueLabel`, `interpretSaveError`.
 
 ## Hak akses
 | Tindakan | Admin | Owner |
 |---|---|---|
-| Kasir: bayar, selesaikan sesi, refund, cetak nota | ✓ | — (tidak ada menu Kasir) |
-| Riwayat: lihat, riwayat koreksi, cetak ulang nota | ✓ | ✓ |
-| Riwayat: koreksi transaksi | ✓ | — |
+| Pendaftaran + pembayaran | ✓ | — (tidak ada menu) |
+| Riwayat: lihat, detail, cetak ulang nota | ✓ | ✓ |
 
 ## API (`api.js`)
 | Fungsi | Endpoint | Dipakai untuk |
 |---|---|---|
-| `getActiveVisits(params)` | `GET /visits?history=false` | Kolom Pelanggan Aktif: `{ date, page, search }` |
-| `getCashierDetail(visitId)` | `GET /visits/:id` | Rincian tagihan |
-| `setTransactionAddons(trxId, data)` | `PUT /transactions/:id/addons` | Tambahan selama sesi: `{ version, addons: [{ addon_id, qty }], reason }` |
-| `addPayment(trxId, data)` | `POST /transactions/:id/payments` | Terima pembayaran |
-| `finishVisit(visitId, data)` | `POST /visits/:id/finish` | Selesaikan sesi (+ pembayaran/refund terakhir) |
-| `addRefund(trxId, data)` | `POST /transactions/:id/refunds` | Kembalikan kelebihan bayar |
-| `downloadReceipt(trxId)` | `GET /transactions/:id/receipt.pdf` | Nota PDF → `openBlob()` untuk mencetak |
+| `registerWalkIn(data)` | `POST /visits/walk-in` | Daftar + tambahan + bayar lunas (atomik) |
+| `getTransactionDetail(visitId)` | `GET /visits/:id` | Detail di Riwayat |
 | `getHistory(params)` | `GET /visits?history=true` | Riwayat: `{ page, search, from, to }`, maks. 100 per halaman |
-| `addCorrection(trxId, data)` | `POST /transactions/:id/corrections` | Koreksi (Admin) |
-| `getAudit(trxId)` | `GET /transactions/:id/audit` | Riwayat koreksi |
+| `downloadReceipt(trxId)` | `GET /transactions/:id/receipt.pdf` | Nota PDF → `openBlob()` |
+| `addPayment(trxId, data)` | `POST /transactions/:id/payments` | Belum dipakai (untuk pelunasan reservasi nanti) |
 
-Data penting dari `getCashierDetail`:
-- `balance = { paid, refunded, net, due, surplus }`: `due` = sisa tagihan, `surplus` = kelebihan bayar.
-- `items` dengan `is_active = 1` = tagihan saat ini.
-- Simpan `visit.version` dan `transaction.version` terbaru untuk request berikutnya.
-- Reservasi yang belum memilih paket: `due = 0` **bukan** berarti lunas.
+Body `registerWalkIn`:
+```js
+{
+  client_request_id, customer_name, package_id, background_id, persons,
+  addons: [{ addon_id, qty }],
+  payment: { client_request_id, method: 'TUNAI' | 'TRANSFER' | 'QRIS', amount, reference },
+}
+```
 
 ## Aturan wajib
-- Pembayaran boleh di awal, berupa DP, atau sebagian. **Mulai foto** (di Antrean) hanya bisa jika tagihan awal lunas.
-- Tambahan selama sesi (tambah waktu, tambah cetak) dicatat lalu dibayar di akhir.
-- Tombol **"Selesaikan & Cetak Nota" nonaktif selama `balance.due > 0`** atau masih ada kelebihan bayar yang belum dikembalikan.
-- `finishVisit` mengirim jumlah orang akhir dan **seluruh** tambahan (array kosong jika tidak ada). Prosesnya atomik: kalau saldo tidak pas, semuanya dibatalkan.
-- Tunai: `amount` = uang yang diserahkan pelanggan; kembalian dihitung backend, tampilkan dari respons. Transfer/QRIS tidak boleh melebihi sisa tagihan.
-- Metode: Tunai, Transfer, QRIS. Tulis **"QRIS"**, bukan "QRIS Dinamis".
-- Refund hanya untuk kelebihan bayar (mis. ganti ke paket lebih murah). Pembatalan tidak mengembalikan uang.
-- Pembayaran tidak bisa dihapus; salah input diperbaiki lewat koreksi. Koreksi transaksi yang sudah lunas wajib alasan. Transaksi batal hanya boleh dikoreksi nama/penerimaannya.
-- Nota hanya ada setelah Selesai; cetak ulang dari Riwayat.
-- `client_request_id = newRequestId()` sekali per pembayaran/refund; pakai ulang saat mencoba lagi.
-- Selama sesi: tambahan layanan disimpan dengan `setTransactionAddons` (alasan otomatis "Tambahan layanan selama sesi"), jumlah orang akhir dengan `updateVisitSelection` dari modul antrean (paket & latar tetap). Lalu bayar sisa, baru "Selesaikan & Cetak Nota" (mengirim jumlah orang & tambahan yang sama → tidak perlu alasan).
-- Reservasi yang belum datang: pembayaran otomatis bertipe **DP** (nontunai wajib referensi). Selain itu bertipe Pembayaran.
-- Data Kasir (pelanggan, rincian, katalog paket/tambahan) diperbarui otomatis tiap 15 detik.
+- **Tunai:** `amount` = uang yang diterima (≥ total); kembalian dihitung backend.
+- **Transfer/QRIS:** nominal otomatis = total, kembalian Rp0.
+- **Referensi** hanya muncul untuk Transfer (opsional).
+- Metode ditulis **"QRIS"**, bukan "QRIS Dinamis".
+- Total di form hanya perkiraan; total resmi dari backend.
+- `client_request_id` dibuat sekali per pengisian form dan dipakai ulang saat mencoba lagi, supaya klik ganda tetap 1 transaksi.
+- Jumlah orang (batas paket & latar) dan uang tunai ("Kurang RpX") dicek **langsung saat diketik**, tanpa menunggu Konfirmasi.
+- Nota tersedia sejak lunas: dicetak dari pop-up Berhasil, lalu bisa dicetak ulang dari Antrean (Detail) atau Riwayat.
+- Pembatalan tidak mengembalikan uang.
 
 ## Error yang ditangani khusus
 | Kode | Tindakan di tampilan |
 |---|---|
-| `UNSETTLED` | Masih ada sisa tagihan/kelebihan bayar saat menyelesaikan (seharusnya tombol sudah nonaktif) |
-| `EXCESS_NONCASH` | Transfer/QRIS melebihi sisa tagihan |
-| `INVALID_CASH` | Uang tunai kurang |
-| `NO_OUTSTANDING` | Tidak ada sisa tagihan |
-| `REFUND_EXCEEDS_SURPLUS`, `REFUND_NOT_ALLOWED` | Refund melebihi kelebihan bayar / tidak diizinkan |
-| `REASON_REQUIRED` | Perubahan transaksi lunas wajib alasan |
-| `INVALID_BALANCE`, `UNSETTLED_CORRECTION` | Koreksi membuat saldo tidak seimbang |
-| `CANCELLED` | Transaksi batal hanya bisa dikoreksi nama/penerimaan |
-| `TERMINAL_VISIT` | Kunjungan sudah berakhir |
-| `RECEIPT_NOT_READY` | Nota baru ada setelah Selesai |
-| `FUTURE_PAYMENT` | Tanggal penerimaan di masa depan |
-| `REFERENCE_REQUIRED` | Pembayaran nontunai wajib referensi |
-| `STALE_VERSION` | Data berubah di komputer lain: muat ulang, jangan kirim ulang otomatis |
+| `PAYMENT_NOT_SETTLED`, `PAYMENT_REQUIRED`, `INVALID_CASH` | Nominal kurang; tandai kolom nominal |
+| `PACKAGE_REQUIRED`, `PERSONS_LIMIT`, `BACKGROUND_REQUIRED`, `BACKGROUND_CAPACITY`, `PACKAGE_INACTIVE` | Isian paket/latar/jumlah orang salah; tandai kolomnya |
 | `IDEMPOTENCY_CONFLICT` | Request ID dipakai untuk data berbeda; isi ulang form |
-
-## Hubungan dengan modul lain
-- **Dari `antrean`:** tombol "Selesaikan sesi" dan penolakan "Mulai foto" membuka `/kasir/:id` (`id` = id kunjungan). Jangan ubah format alamat ini tanpa koordinasi.
-- **Memakai dari `paket`:** `getAddons()` dan `getPackages()` (`@/modules/paket/api`) untuk pilihan tambahan dan ganti paket.
-
-## Checklist selesai
-- [x] Kolom pelanggan aktif + pencarian, klik → `/kasir/:id`
-- [x] Rincian tagihan (item, tambahan, total, sudah bayar, sisa)
-- [x] Form pembayaran Tunai/Transfer/QRIS + kembalian
-- [x] Konfirmasi akhir sesi (jumlah orang akhir + tambahan)
-- [x] "Selesaikan & Cetak Nota" nonaktif selama ada sisa tagihan; nota terbuka setelah selesai
-- [x] Refund kelebihan bayar
-- [x] Riwayat + pencarian + cetak ulang nota
-- [x] Panel koreksi (Admin) + riwayat koreksi (Admin & Owner)
-- [x] Tombol bayar/simpan memakai `loading` (anti klik ganda)
-- [x] `npm run build` dan `npm run lint` lulus
-- [ ] Semua langkah uji di bawah lulus
+| `RECEIPT_NOT_READY` | Nota belum ada (transaksi belum lunas) |
 
 ## Cara mengetes
-1. Paket Rp100.000, bayar Tunai Rp150.000 → kembalian Rp50.000.
-2. Mulai foto (di Antrean) → tambah waktu Rp20.000 → tombol Selesaikan nonaktif → bayar Rp20.000 → tombol aktif → selesai dan nota terbuka.
-3. Transfer melebihi sisa tagihan → ditolak.
-4. Setelah lunas dan sebelum dipanggil, ganti ke paket lebih murah → Mulai foto ditolak karena ada kelebihan bayar → refund kelebihan bayar → Mulai foto berhasil.
-5. Riwayat: koreksi metode bayar dengan alasan → riwayat koreksi bertambah. Login Owner → riwayat koreksi terlihat, tombol koreksi tidak ada.
-6. Cetak ulang nota dari Riwayat.
-7. Tekan Bayar dua kali dengan cepat → hanya 1 pembayaran tercatat.
+1. Pilih RG → chip kapasitas, durasi, urutan, ruangan tampil; tambah waktu 2 → durasi & total ikut naik. Jumlah orang melebihi kapasitas → pesan langsung muncul. Tunai kurang → "Kurang RpX" langsung muncul; Tunai lebih → kembalian benar.
+2. Transfer → nominal = total, kolom referensi muncul; QRIS → tanpa referensi.
+3. Konfirmasi → pop-up Berhasil (nomor antrean, kembalian), nota belum terbuka → Cetak Nota → nota terbuka → Pendaftaran Baru → form kosong; pelanggan muncul di Antrean.
+4. Klik Konfirmasi dua kali cepat → hanya 1 transaksi. Setelah Pendaftaran Baru, pilih paket yang sama → urutan langsung naik 1 (data antrean dimuat ulang setelah daftar).
+5. Antrean: Panggil → Mulai Foto → Selesai → muncul di Riwayat; detail menampilkan pembayaran dan bisa cetak ulang nota.
+6. Batalkan kunjungan → Riwayat menampilkan alasan batal.
+7. Login Owner → tidak ada menu Pendaftaran; Riwayat bisa dilihat.
 
-## Keterbatasan saat ini
-- Koreksi di Riwayat hanya untuk **nama pelanggan** dan **metode/referensi pembayaran** (nominal & waktu tetap). Koreksi nominal/harga rincian belum dibuat karena bisa membuat saldo transaksi selesai tidak pas (backend: `UNSETTLED_CORRECTION`).
-- Jumlah "Koreksi Data" dihitung dari audit tiap transaksi yang tampil (backend belum punya daftar audit global).
+## Belum dibuat / ditunda
+- **Reservasi** (DP lalu pelunasan): tampilan disembunyikan; kode backend & `ReservationForm.jsx` disimpan.
+- **Koreksi** transaksi dan **refund**: dihapus dari tampilan (endpoint backend masih ada).

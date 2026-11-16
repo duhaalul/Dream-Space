@@ -1,6 +1,6 @@
 // Logika papan antrean (tanpa komponen). Urutan pelanggan TIDAK dihitung di sini:
 // GET /visits sudah mengurutkan (prioritas reservasi, jam janji, waktu masuk, id).
-import { formatTime } from '@/shared/utils/format'
+import { formatDuration, formatTime, parseBackendDate } from '@/shared/utils/format'
 import { activePackages } from './visitForm'
 
 export const ROOM_STATUSES = ['DIPANGGIL', 'SEDANG_DILAYANI']
@@ -72,7 +72,52 @@ export function ticketFor(visit, waitingIndex = null) {
   }
 }
 
+// ---- Panel antrean di pop-up Pelanggan Baru ---------------------------------
+
+// Kondisi satu paket dari data useDayVisits: ruangan, yang menunggu (urutan backend),
+// dan reservasi hari itu yang belum datang.
+export function packageQueue(data, pkg) {
+  const room = data.rooms.find((row) => row.package_id === pkg.id && row.active_visit_id) ?? data.rooms.find((row) => row.package_id === pkg.id)
+  const own = data.visits.filter((visit) => visit.package_id === pkg.id)
+  const inRoom = room?.active_visit_id ? own.find((visit) => visit.id === room.active_visit_id) ?? null : null
+
+  // roomState: 'free' | 'called' | 'busy' | 'closed'; roomDetail = siapa di ruangan / alasan tutup.
+  let roomState = 'free'
+  let roomDetail = null
+  if (Number(pkg.is_open) !== 1) {
+    roomState = 'closed'
+    roomDetail = pkg.closed_reason ?? null
+  } else if (room?.active_visit_id) {
+    roomState = room.status === 'SEDANG_DILAYANI' ? 'busy' : 'called'
+    roomDetail = inRoom ? `${queueLabel(inRoom)} ${room.customer_name}` : room.customer_name
+  }
+
+  return {
+    roomState,
+    roomDetail,
+    roomBusy: Boolean(room?.active_visit_id),
+    isOpen: Number(pkg.is_open) === 1,
+    waiting: own.filter((visit) => visit.status === 'MENUNGGU'),
+    pendingReservations: own.filter((visit) => visit.status === 'RESERVASI'),
+  }
+}
+
+// Reservasi pada tanggal data (opsional disaring per paket), urut jam janji.
+export function reservationsOf(data, packageId) {
+  return data.visits
+    .filter((visit) => visit.status === 'RESERVASI' && (!packageId || String(visit.package_id) === String(packageId)))
+    .sort((a, b) => a.appointment_at.localeCompare(b.appointment_at))
+}
+
 // Reservasi baru boleh "Sudah datang" mulai jam janji (backend: APPOINTMENT_NOT_DUE).
 export function appointmentDue(visit, nowWib) {
   return !!visit.appointment_at && visit.appointment_at.slice(0, 16) <= nowWib
+}
+
+// Timer sesi foto: started_at + session_minutes (diisi backend saat Mulai Foto).
+// visit boleh baris kunjungan atau baris GET /queue/rooms. → null bila tidak sedang foto / paket tanpa durasi.
+export function sessionTimer(visit, now = Date.now()) {
+  if (visit?.status !== 'SEDANG_DILAYANI' || !visit.started_at || !visit.session_minutes) return null
+  const left = parseBackendDate(visit.started_at).getTime() + Number(visit.session_minutes) * 60_000 - now
+  return { left, overtime: left < 0, label: formatDuration(Math.abs(left)) }
 }
