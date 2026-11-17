@@ -26,7 +26,7 @@ Satu halaman `/antrean` (tanpa tab): kartu paket → banner ruangan → Di Ruang
 | `components/SessionTimer.jsx` | pil sisa waktu "12:30"; merah "Lewat 2:10" bila habis | Admin; Owner lihat |
 | `components/SessionEndNotifier.jsx` | notifikasi kanan bawah saat waktu sesi habis (dipasang di `app/AppLayout.jsx`, semua halaman) | Admin |
 | `components/VisitActionButtons.jsx` | tombol tindakan per status (semua berikon) | Admin |
-| `components/ReasonDialog.jsx` | dialog alasan (Lewati, Kembalikan, Batalkan) | Admin |
+| `components/ReasonDialog.jsx` | dialog alasan (Batalkan; Kembalikan untuk data lama Dilewati) | Admin |
 | `components/VisitDetailModal.jsx` | Detail ringkas: jadwal & No. WhatsApp (reservasi), paket, tambahan, pembayaran ("Dibayar … · dikembalikan … · sisa …", Lunas dari `payment_status`), jam daftar, alasan batal; Batalkan, Ubah Reservasi, Cetak Nota | Admin; Owner lihat |
 | `components/BoardParts.jsx` | `Section`, `EmptyNote`, `RefreshButton`, `QueueLoading`, `ActionFeedback` | — |
 | `components/PackageFields.jsx` | Paket, Latar, Jumlah Orang sejajar satu baris (Pendaftaran, Reservasi, Sudah Datang); `PACKAGE_GRID` = lajurnya, dipakai baris lain yang ingin lurus | Admin |
@@ -58,9 +58,9 @@ Sudah Datang dan Ubah Reservasi memakai `checkInReservation` dan `updateReservat
 |---|---|---|
 | Reservasi (belum datang) | **Sudah Datang** (hanya pada tanggal reservasi) · Batalkan · Detail (Ubah Reservasi) | check-in · `CANCEL` |
 | Menunggu | Panggil · Batalkan | `CALL` (siapa pun, tanpa alasan) · `CANCEL` |
-| Dipanggil | Mulai Foto · Lewati · Batalkan | `START` · `SKIP` (alasan) · `CANCEL` |
+| Dipanggil | Mulai Foto · **Kembali ke Antrean** · Batalkan | `START` · `UNCALL` (tanpa alasan; kembali ke **urutan semula**, mis. salah panggil atau belum di tempat) · `CANCEL` |
 | Sedang foto | **Selesai** (bisa ditekan kapan saja, walau timer masih berjalan) | `FINISH` (wajib lunas) |
-| Dilewati | Kembalikan · Batalkan | `RETURN` (alasan; masuk paling belakang) · `CANCEL` |
+| Dilewati (hanya data lama; tombol Lewati sudah diganti) | Kembalikan · Batalkan | `RETURN` (alasan; masuk paling belakang) · `CANCEL` |
 | Selesai / Dibatalkan | — | pindah ke Riwayat |
 
 Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar **tidak dikembalikan** (DP maupun reservasi yang sudah lunas).
@@ -134,7 +134,7 @@ Error lain ditampilkan dengan pesan dari backend.
 1. Daftarkan pelanggan di Pendaftaran › Di Tempat → muncul di papan paketnya (Menunggu) dengan nomor `RG-xxx`.
 2. Panggil → Mulai Foto → pil timer berjalan di kartu dan di kartu paket → Selesai → muncul di Riwayat.
 3. Isi Durasi Sesi paket 1 menit → Mulai Foto → setelah 1 menit pil merah "Lewat" dan notifikasi muncul di kanan bawah (juga di halaman Pendaftaran). X menutupnya; Selesai menghapusnya.
-4. Panggil pelanggan kedua di Menunggu → langsung dipanggil tanpa dialog alasan. Lewati tanpa alasan → ditolak. Kembalikan → masuk paling belakang.
+4. Panggil pelanggan kedua di Menunggu → langsung dipanggil tanpa dialog alasan. **Kembali ke Antrean** → tanpa dialog, ruangan kosong, ia kembali ke urutan ke-2 (bukan paling belakang).
 5. Buat reservasi (Pendaftaran › Reservasi) untuk hari ini → muncul di bagian Reservasi. Sudah Datang (paket + DP) → bayar sisa tunai → nomor `RG-R001`, kartu Menunggu "Masuk <jam reservasi>".
 6. Ganti tanggal bagian Reservasi ke besok → tanpa tombol Sudah Datang. Detail › Ubah Reservasi ke hari ini → pindah ke hari ini. Batalkan → hilang dari Reservasi, masuk Riwayat.
 7. Reservasi lunas → Ubah Reservasi, hapus tambahan → "Dikembalikan Rp…" + Dikembalikan lewat Tunai → Simpan → Laporan punya baris Refund minus. Naikkan paket → "Sisa dibayar saat datang" → Sudah Datang menagih sisanya.

@@ -3,7 +3,7 @@
 Pegangan kerja modul **Dashboard dan Laporan** (SRS 5.1, 5.5). Aturan umum ada di [README frontend](../../../README.md).
 
 ## Tujuan
-Owner memantau penjualan dan penerimaan uang, melihat laporan per periode, dan mengekspornya ke PDF/Excel.
+Owner memantau penjualan sebagai **buku kas** (uang masuk DP/Lunas dan uang keluar Refund), melihat laporan per periode, dan mengekspornya ke PDF/Excel. Admin hanya melihat Laporan hari ini.
 FR-11, FR-15 · UC-21, UC-22, UC-23.
 
 ## Penanggung jawab

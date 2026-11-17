@@ -8,6 +8,30 @@ Tagihan yang sudah tercatat wajib lunas sebelum foto dimulai. Tambahan selama se
 
 Implementasi menambahkan request_hash pada visits, payments, dan refunds untuk membandingkan payload retry. Tidak ada tabel bisnis baru. schema_migrations merupakan tabel pencatat migrasi di luar diagram utama.
 
+## Perubahan setelah Revisi 05 (sampai 17 November 2026)
+
+Klien meminta banyak perubahan sehingga SRS bukan lagi satu-satunya acuan; kondisi terkini ada di kode, `API.md`, dan README modul. Tetap 14 tabel + `schema_migrations`.
+
+| Migrasi | Perubahan |
+| --- | --- |
+| 002_paid_off_at | `transactions.paid_off_at`: waktu transaksi **pertama kali** lunas (jam "Lunas" di nota/Riwayat). Tidak dikosongkan bila total naik lagi. |
+| 003_session_duration | `packages.duration_minutes` (durasi sesi), `addons.extra_minutes` (menit tambahan timer), `visits.session_minutes` (diisi saat Mulai Foto). |
+| 004_reservation | `visits.phone` (No. WhatsApp reservasi); `queue_counters.kind` (WALK_IN/RESERVASI) masuk PK; indeks unik nomor menjadi `visits_queue_number (package_id, service_date, customer_type, queue_number)` sehingga datang langsung `RG-001` dan reservasi `RG-R001` punya urutan sendiri. |
+
+**Kolom sisa (dibiarkan, tidak dipakai):**
+- `visits.has_priority`: fitur prioritas/konfirmasi reservasi sudah dihapus, selalu FALSE;
+- `transactions.subtotal`: selalu sama dengan total, karena tidak ada diskon;
+- `transactions.refund_status`: tetap dihitung tapi tidak ditampilkan.
+
+**Aturan yang berubah:**
+- urutan Menunggu = jam masuk (`COALESCE(queue_entered_at, appointment_at)`), tanpa prioritas;
+- panggil di luar urutan tanpa alasan; "Kembali ke Antrean" (UNCALL) mengembalikan pelanggan yang dipanggil ke urutan semula;
+- reservasi wajib paket dan jamnya tidak boleh bentrok per paket;
+- tutup otomatis kunjungan hari sebelumnya;
+- laporan menjadi buku kas.
+
+Tabel `sessions` tidak dibersihkan otomatis karena barisnya dirujuk `audit_logs.session_id`.
+
 ## Perubahan dasar dari Revisi 03
 
 | Sumber keputusan | Perubahan model |
@@ -26,8 +50,8 @@ Implementasi menambahkan request_hash pada visits, payments, dan refunds untuk m
 - sessions mencatat last_activity_at dan revoked_at. Logout, ganti sandi dan reset mencabut sesi yang terkait. JWT memuat ID sesi dan setiap request memeriksa sesi belum dicabut serta idle kurang dari 30 menit. Reset sandi Admin menetapkan must_change_password dan mengharuskan perubahan sebelum memakai fitur usaha.
 - visits dan transactions dibuat bersama dalam transaksi DB. transactions.visit_id adalah FK wajib unik. Reservasi tanpa paket dapat memiliki transaksi dengan nol rincian, package_id/background_id/persons kosong. Sebelum masuk antrean, paket dan jumlah orang valid, latar wajib jika paket memiliki pilihan latar aktif.
 - Paket/kunjungan berpindah hanya sebelum DIPANGGIL. Jika ganti paket saat MENUNGGU, simpan paket, nomor, tanggal dan kode lama dalam event, terbitkan nomor tujuan, dan pertahankan waktu masuk antrean serta ID transaksi. Snapshot kode menjaga nomor historis saat Owner mengubah kode paket. Counter monoton tidak diturunkan atau dipakai ulang.
-- UNIQUE(package_id, service_date, queue_number) di visits dan PK(package_id, service_date) di queue_counters. Kunci baris counter saat menerbitkan nomor. Kunci baris paket saat mengalokasikan DIPANGGIL/SEDANG_DILAYANI. Semua endpoint yang mengubah alokasi memakai urutan penguncian konsisten. Jika melibatkan dua paket, kunci berdasarkan urutan ID.
-- Prioritas ditentukan saat Admin mengonfirmasi reservasi. Keputusan teknis pemecah seri mengikuti rancangan sebelumnya, yakni jam janji, waktu masuk dan ID dalam kelompok prioritas, lalu waktu masuk dan ID untuk kelompok biasa. Admin boleh panggil di luar urutan dengan alasan. Pelanggan kembali dari DILEWATI kehilangan prioritas dan mendapat waktu masuk baru.
+- UNIQUE(package_id, service_date, customer_type, queue_number) di visits dan PK(package_id, service_date, kind) di queue_counters (sejak migrasi 004; semula tanpa customer_type/kind). Kunci baris counter saat menerbitkan nomor. Kunci baris paket saat mengalokasikan DIPANGGIL/SEDANG_DILAYANI. Semua endpoint yang mengubah alokasi memakai urutan penguncian konsisten. Jika melibatkan dua paket, kunci berdasarkan urutan ID.
+- *(Diganti 17 Nov 2026)* Prioritas dan konfirmasi reservasi sudah dihapus. Urutan Menunggu = jam masuk (`queue_entered_at`; reservasi = jam reservasinya saat Sudah Datang), lalu ID. Admin boleh panggil di luar urutan **tanpa** alasan. "Kembali ke Antrean" (UNCALL) mengembalikan pelanggan yang dipanggil ke urutan semula. Lewati/DILEWATI hanya tersisa untuk data lama (kembali dari DILEWATI masuk paling belakang).
 - package_addons menggunakan PK gabungan. Latar harus milik paket, ditegakkan melalui FK gabungan (background_id, package_id) ke pasangan unik (id, package_id) atau validasi atomik. Master yang direferensikan dinonaktifkan, penghapusan fisik dibatasi RESTRICT.
 - Tarif yang sama pada transaksi lama memakai price_type_snapshot, price_snapshot, included_persons_snapshot dan extra_person_price_snapshot. Perubahan jumlah orang pada paket yang sama memakai tarif snapshot. Pergantian paket secara eksplisit menangkap tarif paket tujuan saat itu dan mengaudit nilai lama/baru. Tambahan baru menangkap harga master pada saat ditambahkan. Tambahan yang sudah ada mempertahankan unit_price saat qty berubah. Penggantian harga secara sengaja melalui koreksi harus terlacak.
 - transaction_items menyimpan description, unit_snapshot, qty, unit_price dan amount = qty × unit_price. Rincian lama yang diganti dinonaktifkan, bukan dihapus. PAKET dan TAMBAH_ORANG tidak mengisi addon_id. TAMBAHAN wajib memakai addon yang diizinkan untuk paket tersebut. Latar disalin ke background_snapshot untuk cetak ulang nota.
@@ -56,9 +80,14 @@ Kolom bertanda opsional dapat NULL. appointment_at wajib untuk RESERVASI. Tarif/
 
 ## Cakupan laporan dan batas yang masih terbuka
 
-L-01 mengambil transaksi SELESAI berdasarkan completed_at. L-02 mengagregasi sesi dan nilai penjualan menurut paket, termasuk paket tanpa sesi pada periode terpilih. L-03 memakai paid_at dan refunded_at, serta memisahkan uang yang ditahan dari transaksi batal. L-04 memakai service_date kunjungan dan event historis. Nota dapat dicetak ulang setelah SELESAI menggunakan rincian snapshot dan pembayaran asal. Jadwal periode laporan mengikuti WIB. Semua laporan dan ekspor memeriksa role OWNER di API.
+*(Diperbarui 17 Nov 2026)* Laporan = **buku kas**:
+- **L-01 Penjualan:** satu baris per pembayaran pada `payments.paid_at` (DP/Lunas) dan per refund pada `refunds.refunded_at` (baris minus); total = uang bersih.
+- **L-02 Penjualan per Paket:** L-01 dikelompokkan per paket kunjungan.
+- L-03 dan L-04 dihapus (diganti menu Riwayat).
+- **Nota** hanya untuk sesi SELESAI atau transaksi lunas penuh (`paid_off_at` terisi dan uang bersih ≥ rincian aktif).
+- **Akses:** Owner bebas memilih periode; Admin hanya laporan hari ini. Dashboard khusus Owner. Periode mengikuti WIB.
 
-Aturan 11 menyebut seluruh kunjungan belum selesai dibatalkan saat tutup, sedangkan aturan 18 melarang pembatalan setelah foto mulai. Desain ini menjaga aturan 18. Admin menutup antrean yang belum mulai dengan alasan, sedangkan sesi berjalan harus diselesaikan melalui kasir. Jika studio memerlukan pengakhiran sesi berjalan tanpa lunas, mekanismenya perlu keputusan bisnis baru.
+Aturan 11 dan 18: sejak 16 Nov 2026 backend **menutup otomatis** kunjungan hari sebelumnya. Menunggu/Dipanggil/Dilewati dibatalkan (uang ditahan), Sedang foto yang lunas diselesaikan. Jadi aturan 18 tetap terjaga: sesi berjalan tidak pernah dibatalkan. Reservasi yang belum datang tidak disentuh.
 
 SRS tetap berasumsi satu paket mempunyai ruang sendiri. Dua paket berbagi ruang belum dapat diamankan dengan penguncian per paket. Sebelum produksi, pastikan asumsi tersebut atau tambahkan model sumber daya ruang bersama. Akun Admin bersama juga membatasi akuntabilitas sampai akun/sesi, sesuai keputusan pengguna SRS §2.2.
 
@@ -140,6 +169,7 @@ erDiagram
         bigint extra_person_price "opsional"
         int min_persons "opsional"
         int max_persons "opsional"
+        int duration_minutes "opsional, menit sesi (migrasi 003)"
         text description "opsional"
         boolean is_open
         string closed_reason "opsional"
@@ -159,6 +189,7 @@ erDiagram
         string name
         bigint price
         string unit
+        int extra_minutes "opsional, menit tambahan timer (migrasi 003)"
         boolean is_active
     }
     package_addons {
@@ -202,6 +233,7 @@ erDiagram
         bigint extra_person_price "opsional"
         int min_persons "opsional"
         int max_persons "opsional"
+        int duration_minutes "opsional, menit sesi (migrasi 003)"
         text description "opsional"
         boolean is_open
         string closed_reason "opsional"
@@ -219,6 +251,7 @@ erDiagram
     visits {
         bigint id PK
         string customer_name
+        string phone "opsional, No. WhatsApp (migrasi 004)"
         enum customer_type
         datetime appointment_at "opsional"
         date service_date
@@ -228,10 +261,11 @@ erDiagram
         int queue_number "opsional"
         datetime queue_entered_at "opsional"
         string queue_code_snapshot "opsional sebelum masuk antrean"
-        boolean has_priority
+        boolean has_priority "sisa fitur prioritas, tidak dipakai"
         enum status
         datetime called_at "opsional"
         datetime started_at "opsional"
+        int session_minutes "opsional, timer saat Mulai Foto (migrasi 003)"
         datetime finished_at "opsional"
         string cancel_reason "opsional"
         string note "opsional"
@@ -259,6 +293,7 @@ erDiagram
     queue_counters {
         int package_id PK, FK
         date service_date PK
+        enum kind PK "WALK_IN atau RESERVASI (migrasi 004)"
         int last_number
     }
     transactions {
@@ -270,11 +305,12 @@ erDiagram
         int included_persons_snapshot "opsional"
         bigint extra_person_price_snapshot "opsional"
         string background_snapshot "opsional"
-        bigint subtotal
+        bigint subtotal "sisa, selalu sama dengan total"
         bigint total
         enum payment_status
-        enum refund_status
+        enum refund_status "sisa, tidak ditampilkan"
         datetime completed_at "opsional"
+        datetime paid_off_at "opsional, pertama kali lunas (migrasi 002)"
         datetime cancelled_at "opsional"
         int created_by FK
         datetime created_at
@@ -311,6 +347,7 @@ erDiagram
     visits {
         bigint id PK
         string customer_name
+        string phone "opsional, No. WhatsApp (migrasi 004)"
         enum customer_type
         datetime appointment_at "opsional"
         date service_date
@@ -320,10 +357,11 @@ erDiagram
         int queue_number "opsional"
         datetime queue_entered_at "opsional"
         string queue_code_snapshot "opsional sebelum masuk antrean"
-        boolean has_priority
+        boolean has_priority "sisa fitur prioritas, tidak dipakai"
         enum status
         datetime called_at "opsional"
         datetime started_at "opsional"
+        int session_minutes "opsional, timer saat Mulai Foto (migrasi 003)"
         datetime finished_at "opsional"
         string cancel_reason "opsional"
         string note "opsional"
@@ -343,11 +381,12 @@ erDiagram
         int included_persons_snapshot "opsional"
         bigint extra_person_price_snapshot "opsional"
         string background_snapshot "opsional"
-        bigint subtotal
+        bigint subtotal "sisa, selalu sama dengan total"
         bigint total
         enum payment_status
-        enum refund_status
+        enum refund_status "sisa, tidak ditampilkan"
         datetime completed_at "opsional"
+        datetime paid_off_at "opsional, pertama kali lunas (migrasi 002)"
         datetime cancelled_at "opsional"
         int created_by FK
         datetime created_at
@@ -374,6 +413,7 @@ erDiagram
         string name
         bigint price
         string unit
+        int extra_minutes "opsional, menit tambahan timer (migrasi 003)"
         boolean is_active
     }
     payments {

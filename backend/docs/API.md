@@ -206,9 +206,10 @@ Detail dan hasil mutasi mengembalikan:
 | action | Dari → ke | Ketentuan |
 |---|---|---|
 | CALL | MENUNGGU → DIPANGGIL | Ruangan terbuka/kosong. Boleh di luar urutan tanpa alasan (keputusan Admin). |
+| UNCALL | DIPANGGIL → MENUNGGU | Tombol **"Kembali ke Antrean"** (salah panggil / belum di tempat), sejak 17 Nov 2026. Tanpa alasan. `called_at` dikosongkan, `queue_entered_at` tetap → kembali ke **urutan semula**; ruangan langsung kosong. |
 | START | DIPANGGIL → SEDANG_DILAYANI | Seluruh tagihan yang sudah tercatat wajib lunas. Mengisi `visit.session_minutes` = `duration_minutes` paket + Σ(qty × `extra_minutes`) tambahan aktif (`null` bila paket tanpa durasi). Timer = `started_at` + `session_minutes`. |
-| SKIP | DIPANGGIL → DILEWATI | Wajib alasan. |
-| RETURN | DILEWATI → MENUNGGU | Hari yang sama, wajib alasan; jam masuk = sekarang, jadi masuk paling belakang. |
+| SKIP | DIPANGGIL → DILEWATI | Wajib alasan. **Tidak dipakai tampilan lagi** (diganti UNCALL); tetap diterima backend. |
+| RETURN | DILEWATI → MENUNGGU | Hari yang sama, wajib alasan; jam masuk = sekarang, jadi masuk paling belakang. Tampilan hanya untuk data lama berstatus Dilewati. |
 | CANCEL | Sebelum mulai → DIBATALKAN | Wajib alasan; uang bersih ditahan, **tidak dikembalikan** (DP maupun reservasi yang sudah lunas). Berlaku juga untuk status RESERVASI. Tidak boleh membatalkan sesi berjalan. |
 | FINISH | SEDANG_DILAYANI → SELESAI | Tagihan harus lunas (`UNSETTLED` bila tidak). Cukup `version`; dipakai tombol "Selesai" di Antrean. |
 

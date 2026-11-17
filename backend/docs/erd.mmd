@@ -49,6 +49,7 @@ erDiagram
         bigint extra_person_price "opsional"
         int min_persons "opsional"
         int max_persons "opsional"
+        int duration_minutes "opsional, menit sesi (migrasi 003)"
         text description "opsional"
         boolean is_open
         string closed_reason "opsional"
@@ -68,6 +69,7 @@ erDiagram
         string name
         bigint price
         string unit
+        int extra_minutes "opsional, menit tambahan timer (migrasi 003)"
         boolean is_active
     }
     package_addons {
@@ -77,6 +79,7 @@ erDiagram
     visits {
         bigint id PK
         string customer_name
+        string phone "opsional, No. WhatsApp (migrasi 004)"
         enum customer_type
         datetime appointment_at "opsional"
         date service_date
@@ -86,10 +89,11 @@ erDiagram
         int queue_number "opsional"
         datetime queue_entered_at "opsional"
         string queue_code_snapshot "opsional sebelum masuk antrean"
-        boolean has_priority
+        boolean has_priority "sisa fitur prioritas, tidak dipakai"
         enum status
         datetime called_at "opsional"
         datetime started_at "opsional"
+        int session_minutes "opsional, timer saat Mulai Foto (migrasi 003)"
         datetime finished_at "opsional"
         string cancel_reason "opsional"
         string note "opsional"
@@ -103,6 +107,7 @@ erDiagram
     queue_counters {
         int package_id PK, FK
         date service_date PK
+        enum kind PK "WALK_IN atau RESERVASI (migrasi 004)"
         int last_number
     }
     visit_events {
@@ -128,11 +133,12 @@ erDiagram
         int included_persons_snapshot "opsional"
         bigint extra_person_price_snapshot "opsional"
         string background_snapshot "opsional"
-        bigint subtotal
+        bigint subtotal "sisa, selalu sama dengan total"
         bigint total
         enum payment_status
-        enum refund_status
+        enum refund_status "sisa, tidak ditampilkan"
         datetime completed_at "opsional"
+        datetime paid_off_at "opsional, pertama kali lunas (migrasi 002)"
         datetime cancelled_at "opsional"
         int created_by FK
         datetime created_at
