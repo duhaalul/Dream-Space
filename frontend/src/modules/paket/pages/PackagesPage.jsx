@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DoorClosed, DoorOpen, Eye, EyeOff, Layers, LayoutGrid, Pencil, Plus, Sparkles, Timer, Users } from 'lucide-react'
+import { Check, DoorClosed, DoorOpen, Eye, EyeOff, Layers, LayoutGrid, Pencil, Plus, Sparkles, Timer, Users } from 'lucide-react'
 import { useAuth } from '@/modules/akun/useAuth'
 import {
   Alert,
   Badge,
   Button,
   Card,
+  Modal,
   PageHeader,
   SegmentedControl,
 } from '@/shared/components/ui'
@@ -56,6 +57,8 @@ export default function PackagesPage() {
   const [loading, setLoading] = useState(true)
   const [togglingId, setTogglingId] = useState(null)
   const [error, setError] = useState(null)
+  // Paket yang ditolak dinonaktifkan karena masih dipakai (backend PACKAGE_IN_USE): { name, message } → pop-up.
+  const [inUse, setInUse] = useState(null)
   const loadData = useCallback(async () => {
     try {
       const [pkgRes, addonList] = await Promise.all([getPackages(), getAddons()])
@@ -153,7 +156,9 @@ export default function PackagesPage() {
       })
       await loadData()
     } catch (err) {
-      setError(err)
+      // Masih ada antrean/sesi/reservasi di paket ini → pop-up penjelasan, bukan pesan error biasa.
+      if (err?.code === 'PACKAGE_IN_USE') setInUse({ name: pkg.name, message: err.message })
+      else setError(err)
     } finally {
       setTogglingId(null)
     }
@@ -414,6 +419,31 @@ export default function PackagesPage() {
             <Card title="Tambahan Layanan">
               <AddonManager addons={addons} usage={addonUsage} onChanged={loadData} />
             </Card>
+
+            {inUse && (
+              <Modal
+                open
+                title={`${inUse.name} belum bisa dinonaktifkan`}
+                onClose={() => setInUse(null)}
+                footer={
+                  <Button variant="primary" onClick={() => setInUse(null)}>
+                    <Check aria-hidden="true" className="h-4 w-4" /> Mengerti
+                  </Button>
+                }
+              >
+                <div className="space-y-3 text-sm text-slate-600">
+                  <p>{inUse.message}</p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>
+                      Sesi & antrean: selesaikan di menu <strong>Antrean</strong>.
+                    </li>
+                    <li>
+                      Reservasi: <strong>Antrean › Reservasi</strong> → Batalkan, atau <strong>Detail › Ubah Reservasi</strong> untuk pindah paket.
+                    </li>
+                  </ul>
+                </div>
+              </Modal>
+            )}
           </>
         )}
       </div>

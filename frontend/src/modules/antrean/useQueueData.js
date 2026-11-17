@@ -27,7 +27,15 @@ function rowFromDetail(detail) {
     total: detail.transaction.total,
     payment_status: detail.transaction.payment_status,
     transaction_version: detail.transaction.version,
+    paid: detail.balance.net,
   }
+}
+
+// Tanggal WIB "YYYY-MM-DD" digeser n hari.
+function shiftDate(date, days) {
+  const value = new Date(`${date}T00:00:00Z`)
+  value.setUTCDate(value.getUTCDate() + days)
+  return value.toISOString().slice(0, 10)
 }
 
 async function fetchQueue() {
@@ -107,6 +115,43 @@ export function useReservations(date) {
   }, [reload])
 
   return { data: state?.date === date ? state.visits : null, error, reload }
+}
+
+// Reservasi TERLEWAT: tanggalnya sudah lewat tapi pelanggan belum datang dan belum dibatalkan
+// (tanda "Terlewat (N)" di bagian Reservasi). Rentang 1 tahun ke belakang (batas backend 367 hari), urut jadwal.
+// Diperbarui otomatis seperti papan. → { data: visits[] | null, error, reload }
+export function useOverdueReservations() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const latest = useRef(0)
+
+  const reload = useCallback(() => {
+    const ticket = ++latest.current
+    const today = todayWib()
+    return fetchActiveVisits({ from: shiftDate(today, -365), to: shiftDate(today, -1) })
+      .then((visits) => {
+        if (ticket !== latest.current) return
+        setData(
+          visits
+            .filter((visit) => visit.status === 'RESERVASI')
+            .sort((a, b) => String(a.appointment_at).localeCompare(String(b.appointment_at)) || a.id - b.id),
+        )
+        setError(null)
+      })
+      .catch((err) => {
+        if (ticket === latest.current) setError(err)
+      })
+  }, [])
+
+  useEffect(() => {
+    reload()
+    const timer = setInterval(() => {
+      if (!document.hidden) reload()
+    }, REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [reload])
+
+  return { data, error, reload }
 }
 
 // Kunjungan aktif pada satu tanggal + kondisi ruangan (info "Urutan ke-N" di Pendaftaran).
