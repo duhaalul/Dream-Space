@@ -16,8 +16,8 @@ FR-01, FR-13 · UC-01, UC-02, UC-24.
 | `pages/LoginPage.jsx` | Selamat Datang Kembali | publik | Selesai, sesuai Figma |
 | `components/LoginBrandPanel.jsx` | Panel biru logo Dream Space (kanan Login, layar lebar saja) | publik | Selesai |
 | `pages/ProfilePage.jsx` | Profil | Admin, Owner | Selesai, sesuai Figma |
-| `components/ChangePasswordForm.jsx` | Profil › ubah kata sandi | Admin, Owner | Selesai |
-| `components/ResetAdminPasswordForm.jsx` | Profil Owner › reset kata sandi Admin | Owner | Selesai |
+| `components/ChangePasswordForm.jsx` | Profil › ubah kata sandi (`PasswordInput` bertombol mata) | Admin, Owner | Selesai |
+| `components/ResetAdminPasswordForm.jsx` | Profil Owner › reset kata sandi Admin (`PasswordInput` bertombol mata) | Owner | Selesai |
 | `AuthContext.jsx`, `useAuth.js` | — | semua | Selesai |
 | `passwordRules.js` | — | — | Selesai |
 

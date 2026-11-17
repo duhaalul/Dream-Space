@@ -116,7 +116,9 @@ Contoh tampilan semua komponen ada di `/dev/komponen`.
 | `StatCard` | `label`, `value`, `hint?`, `icon?`, `tone` (`brand`/`green`) | `<StatCard label="Sesi Selesai" value="3 Sesi" tone="green" />` |
 | `SegmentedControl` | `options: [{ value, label }]`, `value`, `onChange`, `tone` (`success`/`brand`), `label` | Periode laporan, metode bayar, tab |
 | `Table` | `columns: [{ key, header, align?, render? }]`, `rows`, `rowKey?`, `empty?` | Tabel Riwayat dan Laporan |
-| `Input` | `label`, `error?`, `hint?` + atribut `<input>` | `<Input label="Uang Diterima" value={…} onChange={…} />` |
+| `Input` | `label`, `error?`, `hint?`, `trailing?` + atribut `<input>`. `type="number"` otomatis hanya menerima angka (tanpa `e + - . ,`) | `<Input label="Uang Diterima" type="number" value={…} onChange={…} />` |
+| `PasswordInput` | sama dengan `Input`; tombol mata (terbuka = terlihat, dicoret = bintang) | `<PasswordInput label="Kata sandi baru" value={…} onChange={…} />` |
+| `numberGuard()` | untuk `<input type="number">` mentah (bukan `Input`) | `<input type="number" {...numberGuard()} />` |
 | `Select` | `label`, `options: [{ value, label }]`, `placeholder?`, `error?` | `<Select label="Paket" options={…} />` |
 | `Badge` | `tone` (`brand`/`green`/`amber`/`red`/`gray`) | `<Badge tone="amber">Belum Lunas</Badge>` |
 | `Alert` | `variant` (`error`/`success`/`warning`/`info`), `requestId?` | `<Alert variant="error">{error.message}</Alert>` |
@@ -229,10 +231,11 @@ Bila desain memuat bagian yang endpoint-nya tidak ada di `docs/API.md` (branch b
 
 Sudah berfungsi:
 - Login, logout, penjaga halaman per peran; menu samping (komputer) dan bilah atas (HP).
-- Pendaftaran (daftar + bayar lunas, pop-up Berhasil + Cetak Nota), Antrean (timer sesi, notifikasi waktu habis), Riwayat.
-- Kelola Paket (termasuk durasi sesi & menit tambahan), Dashboard, Laporan, Profil.
+- Pendaftaran: tab Di Tempat (daftar + bayar lunas, pop-up Berhasil + Cetak Nota) dan Reservasi (jadwal, DP/Lunas lewat Transfer/QRIS).
+- Antrean (timer sesi, notifikasi waktu habis, bagian Reservasi + Ubah Reservasi (dengan refund) + Sudah Datang (tambahan boleh ditambah)), Riwayat.
+- Kelola Paket (termasuk durasi sesi & menit tambahan), Dashboard, Laporan (buku kas: DP/Lunas/Refund; Admin hari ini), Profil.
 
-Ditunda: reservasi WhatsApp, koreksi transaksi, peninjauan laporan Penjualan vs Penerimaan.
+Ditunda: koreksi transaksi, aturan DP otomatis.
 
 ## Deploy (Vercel)
 

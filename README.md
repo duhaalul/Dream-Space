@@ -199,16 +199,17 @@ Backend dan frontend sudah berada di branch `main`, masing-masing di folder [`ba
 | --- | --- | --- |
 | Backend: migrasi, autentikasi, katalog, antrean, kasir, laporan, backup | Duha | Selesai; unit & integration test lulus |
 | Frontend: menu, komponen dasar, Login | Ihsan | Selesai |
-| Frontend: Pendaftaran (daftar + bayar lunas, nota) dan Riwayat | Ihsan | Selesai |
-| Frontend: Antrean (per paket, ringkasan, detail kunjungan) | Ihsan | Selesai |
+| Frontend: Pendaftaran (tab Di Tempat & Reservasi: DP/lunas, nota) dan Riwayat | Ihsan | Selesai |
+| Frontend: Antrean (per paket, bagian Reservasi + Ubah Reservasi + Sudah Datang, detail kunjungan) | Ihsan | Selesai |
 | Frontend: Paket/Kelola Paket, Dashboard, Laporan, Profil | Larisa | Selesai |
 
 Tahap berikutnya: uji integrasi tim, UAT di studio, pengujian printer nota, dan deployment.
 
 Batasan yang diketahui (rincian di README modul [antrean](frontend/src/modules/antrean/README.md) dan [kasir](frontend/src/modules/kasir/README.md)):
-- **Reservasi WhatsApp** (DP lalu pelunasan) ditunda: tampilannya disembunyikan, kode backend tetap ada.
-- **Koreksi transaksi** (mis. ganti paket setelah lunas) belum tersedia; akan ditambahkan kemudian.
-- Laporan Rekap Kunjungan (L-04) dan refund dihapus dari tampilan; perbedaan laporan Penjualan dan Penerimaan Uang akan ditinjau ulang.
+- **Koreksi transaksi** setelah pelanggan masuk antrean (mis. ganti paket, salah metode bayar) belum tersedia; akan ditambahkan kemudian.
+- Laporan tinggal L-01 Penjualan dan L-02 Penjualan per Paket, berupa **buku kas**: uang masuk per pembayaran (DP / Lunas) pada hari bayar dan **Refund** (baris minus) pada hari pengembalian; Admin bisa melihat laporan hari ini. L-03 Penerimaan Uang dan L-04 Rekap Kunjungan dihapus.
+- Reservasi wajib memilih paket; jam reservasi di paket yang sama tidak boleh bentrok (durasi paket + tambah waktu).
+- Reservasi bisa diubah sebelum datang (paket, tambahan, jadwal): lebih mahal → sisa dibayar saat datang; lebih murah dari yang sudah dibayar → kelebihan dikembalikan. Batal tidak mengembalikan uang (DP maupun lunas).
 
 ## Dokumentasi dan Mulai Pengembangan
 
