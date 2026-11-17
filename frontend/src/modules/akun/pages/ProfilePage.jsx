@@ -63,19 +63,19 @@ export default function ProfilePage() {
         {/* Kolom Kiri: Kartu Identitas Akun & Ubah Nama Tampilan */}
         <div className="space-y-6 lg:col-span-5">
           <Card>
-            <div className="flex flex-col items-center text-center sm:flex-row sm:text-left">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-linear-to-br from-brand-500 via-cyan-500 to-emerald-500 text-3xl font-bold text-white shadow-md shadow-brand-500/20">
+            <div className="flex items-center max-sm:gap-3 sm:flex-row sm:text-left">
+              <div className="flex h-12 w-12 shrink-0 sm:h-20 sm:w-20 items-center justify-center rounded-3xl bg-linear-to-br from-brand-500 via-cyan-500 to-emerald-500 text-3xl font-bold text-white shadow-md shadow-brand-500/20">
                 {initial}
               </div>
-              <div className="mt-4 min-w-0 sm:mt-0 sm:ml-5">
-                <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                  <h2 className="truncate text-xl font-bold text-slate-800">{user.name}</h2>
+              <div className="min-w-0 sm:ml-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold max-sm:wrap-anywhere sm:truncate sm:text-xl text-slate-800">{user.name}</h2>
                   <Badge tone={isOwner ? 'brand' : 'green'}>{ROLE_LABELS[user.role]}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
                   Nama pengguna: <b className="text-slate-700">{user.username}</b>
                 </p>
-                <div className="mt-2.5 flex flex-wrap justify-center gap-2 sm:justify-start">
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   <Badge tone={user.must_change_password ? 'amber' : 'green'}>
                     {user.must_change_password ? 'Wajib Ganti Sandi' : 'Sesi Aktif'}
                   </Badge>

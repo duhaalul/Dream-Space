@@ -1,6 +1,6 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
-import { Power } from 'lucide-react'
+import { Menu, Power, X } from 'lucide-react'
 import logoDs from '@/assets/logo-ds.png'
 import { useAuth } from '@/modules/akun/useAuth'
 import SessionEndNotifier from '@/modules/antrean/components/SessionEndNotifier'
@@ -17,26 +17,37 @@ export default function AppLayout() {
   const { user, logout } = useAuth()
   const [loggingOut, setLoggingOut] = useState(false)
   const menu = menuFor(user.role)
+  const isOwner = user.role === ROLES.OWNER
+  const mobileMenu = useRef(null)
   const displayName = user.name || ROLE_LABELS[user.role]
   const initial = displayName.trim().charAt(0).toUpperCase()
 
   async function handleLogout() {
+    mobileMenu.current?.close()
     setLoggingOut(true)
     await logout()
   }
 
-  return (
-    <div className="min-h-screen lg:flex">
-      {/* Menu samping — layar lebar */}
-      <aside
-        className={`relative hidden shrink-0 overflow-hidden rounded-r-[2rem] bg-linear-to-b text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 ${BRAND_GRADIENT}`}
-      >
+  function closeMobileMenu() {
+    mobileMenu.current?.close()
+  }
+
+  function sidebarContent(compact) {
+    return (
+      <>
         <span aria-hidden="true" className="absolute -top-16 -left-16 h-44 w-44 rounded-full bg-white/15" />
         <span aria-hidden="true" className="absolute top-1/3 -right-24 h-64 w-48 rounded-full bg-white/10" />
         <span aria-hidden="true" className="absolute bottom-20 -left-24 h-56 w-40 rounded-full bg-white/10" />
 
-        <div className="relative flex w-full flex-col px-5 py-6">
-          <img src={logoDs} alt="Dream Space" className="ml-2 w-20" />
+        <div className={compact ? 'relative flex min-h-full w-full flex-col px-5 py-6' : 'relative flex w-full flex-col px-5 py-6'}>
+          {compact ? (
+            <div className="flex items-start justify-between">
+              <img src={logoDs} alt="Dream Space" className="ml-2 w-20" />
+              <button type="button" aria-label="Tutup menu" onClick={closeMobileMenu} className="grid size-11 place-items-center rounded-xl hover:bg-white/15">
+                <X aria-hidden="true" className="size-5" />
+              </button>
+            </div>
+          ) : <img src={logoDs} alt="Dream Space" className="ml-2 w-20" />}
 
           <div className="mt-8 flex items-center gap-3 border-b border-white/30 pb-5">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-brand-600">
@@ -44,7 +55,7 @@ export default function AppLayout() {
             </span>
             <div className="min-w-0">
               <p className="text-xs text-white/85">Selamat datang,</p>
-              <p className="truncate font-bold">{displayName}</p>
+              <p className={compact ? 'wrap-anywhere font-bold' : 'truncate font-bold'}>{displayName}</p>
             </div>
           </div>
 
@@ -53,6 +64,7 @@ export default function AppLayout() {
               <NavLink
                 key={to}
                 to={to}
+                onClick={compact ? closeMobileMenu : undefined}
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors ${
                     isActive ? 'bg-white font-bold text-brand-600 shadow-sm' : 'text-white hover:bg-white/15'
@@ -77,12 +89,28 @@ export default function AppLayout() {
             </button>
           </div>
         </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="min-h-screen lg:flex">
+      {/* Menu samping — layar lebar */}
+      <aside
+        className={`relative hidden shrink-0 overflow-hidden rounded-r-[2rem] bg-linear-to-b text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 ${BRAND_GRADIENT}`}
+      >
+        {sidebarContent(false)}
       </aside>
 
       {/* Bilah atas — HP dan tablet */}
       <header className={`sticky top-0 z-30 bg-linear-to-r text-white shadow-md lg:hidden ${BRAND_GRADIENT}`}>
         <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
           <div className="flex min-w-0 items-center gap-3">
+            {isOwner && (
+              <button type="button" aria-haspopup="dialog" aria-controls="owner-mobile-menu" aria-label="Buka menu" onClick={() => mobileMenu.current?.showModal()} className="grid size-11 shrink-0 place-items-center rounded-xl hover:bg-white/15">
+                <Menu aria-hidden="true" className="size-6" />
+              </button>
+            )}
             <img src={logoDs} alt="Dream Space" className="h-9 w-auto" />
             <div className="min-w-0">
               <p className="text-[11px] leading-tight text-white/85">Selamat datang,</p>
@@ -99,7 +127,7 @@ export default function AppLayout() {
             <Power aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
-        <nav aria-label="Menu" className="flex gap-1.5 overflow-x-auto px-3 pb-3">
+        {!isOwner && <nav aria-label="Menu" className="flex gap-1.5 overflow-x-auto px-3 pb-3">
           {menu.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -114,8 +142,19 @@ export default function AppLayout() {
               {label}
             </NavLink>
           ))}
-        </nav>
+        </nav>}
       </header>
+      {isOwner && (
+        <dialog
+          id="owner-mobile-menu"
+          ref={mobileMenu}
+          aria-label="Menu utama Owner"
+          className={`fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none w-64 max-w-[85vw] overflow-y-auto overscroll-contain rounded-r-[2rem] bg-linear-to-b p-0 text-white backdrop:bg-slate-900/40 lg:hidden ${BRAND_GRADIENT}`}
+          onClick={(event) => { if (event.target === event.currentTarget) closeMobileMenu() }}
+        >
+          {sidebarContent(true)}
+        </dialog>
+      )}
 
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
         <Suspense fallback={<PageLoading />}>

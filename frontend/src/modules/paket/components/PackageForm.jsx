@@ -258,7 +258,7 @@ export default function PackageForm({ pkg = null, backgrounds = [], addons = [],
 
         <section>
           <SectionTitle>Info Paket</SectionTitle>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Input label="Nama Paket *" placeholder="Mis. Reguler Studio" maxLength={100} value={form.name} onChange={(e) => updateField('name', e.target.value)} error={fieldErrors.name} />
             <Input label="Kode Antrean *" placeholder="Mis. RG" maxLength={10} value={form.queue_code} onChange={(e) => updateField('queue_code', e.target.value.toUpperCase())} error={fieldErrors.queue_code} />
             <Select label="Skema Harga *" options={PRICE_TYPE_OPTIONS} value={form.price_type} onChange={(e) => updateField('price_type', e.target.value)} />
@@ -289,7 +289,7 @@ export default function PackageForm({ pkg = null, backgrounds = [], addons = [],
           </p>
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 max-sm:grid-cols-1 lg:grid-cols-2">
           <section>
             <SectionTitle
               aside={

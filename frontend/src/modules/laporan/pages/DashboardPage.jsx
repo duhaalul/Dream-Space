@@ -123,9 +123,10 @@ export default function DashboardPage() {
         )}
 
         {/* 3 Kartu Ringkasan Utama */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           <StatCard
             label="Nilai Penjualan"
+            className="col-span-2 max-sm:[&>p:first-of-type]:text-2xl sm:col-span-1"
             value={formatRupiah(dashboard?.sales ?? 0)}
             hint={`DP ${formatRupiah(dashboard?.dp?.amount ?? 0)} · Lunas ${formatRupiah(dashboard?.lunas?.amount ?? 0)}${
               dashboard?.refund?.amount ? ` · Refund −${formatRupiah(dashboard.refund.amount)}` : ''
@@ -222,26 +223,26 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={pkg.package_id ?? pkg.name}
-                    className="flex flex-wrap items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0"
+                    className="grid grid-cols-[minmax(0,1fr)_38%] items-center gap-3 py-3.5 first:pt-0 last:pb-0 sm:flex sm:flex-wrap sm:justify-between sm:gap-4"
                   >
-                    <div className="flex min-w-0 items-center gap-3.5">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-sm font-bold text-brand-600">
+                    <div className="flex min-w-0 items-start gap-2.5 sm:items-center sm:gap-3.5">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xs font-bold text-brand-600 sm:size-10 sm:text-sm">
                         #{rank}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate font-bold text-slate-800">{pkg.name}</p>
+                        <p className="max-sm:wrap-anywhere text-sm font-bold text-slate-800 sm:truncate sm:text-base">{pkg.name}</p>
                         <p className="text-xs text-slate-500">
                           {sessionsCount} Pembayaran
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 sm:gap-6">
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-slate-800">
+                    <div className="flex flex-col items-end gap-1.5 max-sm:min-w-0 sm:flex-row sm:items-center sm:gap-6">
+                      <div className="text-right max-sm:w-full max-sm:min-w-0">
+                        <p className="max-sm:wrap-anywhere text-sm font-bold max-sm:tabular-nums text-slate-800">
                           {formatRupiah(pkg.sales ?? 0)}
                         </p>
-                        <p className="text-[11px] text-slate-500">Total penjualan</p>
+                        <p className="hidden text-[11px] text-slate-500 sm:block">Total penjualan</p>
                       </div>
                       <Badge tone={badgeTone}>{badgeLabel}</Badge>
                     </div>
