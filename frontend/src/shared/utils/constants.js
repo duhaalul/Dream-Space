@@ -38,29 +38,20 @@ export const VISIT_STATUS_TONES = {
 }
 
 // Reservasi masuk antrean lewat "Sudah Datang" (checkInReservation di kasir/api.js), bukan aksi ini.
+// Lewati (SKIP) tidak dipakai lagi (diganti "Kembali ke Antrean"); RETURN hanya untuk data lama berstatus Dilewati.
 export const VISIT_ACTIONS = {
   CALL: 'CALL', // Panggil
+  UNCALL: 'UNCALL', // Kembali ke Antrean (salah panggil; urutan semula)
   START: 'START', // Mulai foto
-  SKIP: 'SKIP', // Lewati
-  RETURN: 'RETURN', // Kembalikan ke antrean
+  RETURN: 'RETURN', // Kembalikan (Dilewati → paling belakang)
   CANCEL: 'CANCEL', // Batalkan
   FINISH: 'FINISH', // Selesai (sesi foto selesai; tagihan sudah lunas saat mendaftar)
-}
-
-export const CUSTOMER_TYPES = {
-  WALK_IN: 'WALK_IN',
-  RESERVASI: 'RESERVASI',
 }
 
 export const PAYMENT_METHOD_LABELS = {
   TUNAI: 'Tunai',
   TRANSFER: 'Transfer',
   QRIS: 'QRIS',
-}
-
-export const PAYMENT_TYPE_LABELS = {
-  DP: 'DP',
-  PEMBAYARAN: 'Pembayaran',
 }
 
 // transactions.payment_status → label + warna <Badge tone>.

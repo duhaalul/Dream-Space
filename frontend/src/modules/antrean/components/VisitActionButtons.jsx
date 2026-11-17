@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, Megaphone, SkipForward, Undo2, XCircle } from 'lucide-react'
+import { Camera, CheckCircle2, Megaphone, Undo2, XCircle } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import { VISIT_ACTIONS } from '@/shared/utils/constants'
 import { todayWib } from '@/shared/utils/format'
@@ -43,8 +43,9 @@ export default function VisitActionButtons({ visit, actions, call = { blocked: n
         <Button key="start" size="sm" variant="success" loading={loading} disabled={anyBusy} onClick={() => actions.run(visit, VISIT_ACTIONS.START)}>
           {!loading && <Camera aria-hidden="true" className="h-3.5 w-3.5" />} Mulai Foto
         </Button>,
-        <Button key="skip" size="sm" variant="neutral" disabled={anyBusy} onClick={() => actions.ask(visit, VISIT_ACTIONS.SKIP)}>
-          <SkipForward aria-hidden="true" className="h-3.5 w-3.5" /> Lewati
+        // Salah panggil / belum di tempat: kembali ke Menunggu di urutan semula, tanpa alasan (pengganti "Lewati").
+        <Button key="uncall" size="sm" variant="neutral" disabled={anyBusy} onClick={() => actions.run(visit, VISIT_ACTIONS.UNCALL)}>
+          <Undo2 aria-hidden="true" className="h-3.5 w-3.5" /> Kembali ke Antrean
         </Button>,
         cancel,
       ]
@@ -55,6 +56,7 @@ export default function VisitActionButtons({ visit, actions, call = { blocked: n
         </Button>
       )
     case 'DILEWATI':
+      // Hanya untuk data lama (tombol Lewati sudah diganti "Kembali ke Antrean").
       return [
         // Kembali ke antrean hanya untuk antrean hari ini (backend: INVALID_TRANSITION).
         isToday && (

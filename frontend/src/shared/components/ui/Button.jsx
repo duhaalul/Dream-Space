@@ -6,7 +6,7 @@
 //   soft         biru muda           (Ke Kasir, Kembalikan ke Antrean)
 //   soft-success hijau muda          (Unduh Excel)
 //   danger       merah muda          (Batalkan, Unduh PDF)
-//   neutral      abu-abu             (Lewati)
+//   neutral      abu-abu             (Kembali ke Antrean)
 //   ghost        transparan          (tombol ikon)
 const VARIANTS = {
   primary: 'bg-linear-to-r from-brand-500 to-brand-600 text-white shadow-md shadow-brand-500/25 hover:brightness-105',
