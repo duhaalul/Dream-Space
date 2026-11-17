@@ -84,7 +84,26 @@ export default function QueueBoard() {
 
   return (
     <div className="space-y-6">
-      <PackageTiles rooms={rooms} selectedId={room.pkg.id} onSelect={selectPackage} />
+      {!isAdmin && (
+        <label className="block space-y-1.5 text-sm font-medium text-slate-700 sm:hidden">
+          Paket antrean
+          <select
+            className="min-h-11 w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3 text-base text-slate-800"
+            value={room.pkg.queue_code}
+            onChange={(event) => {
+              const selected = rooms.find((item) => item.pkg.queue_code === event.target.value)
+              if (selected) selectPackage(selected.pkg)
+            }}
+          >
+            {rooms.map(({ pkg, waiting }) => (
+              <option key={pkg.id} value={pkg.queue_code}>{pkg.name} · {waiting.length} menunggu</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className={isAdmin ? '' : 'hidden sm:block'}>
+        <PackageTiles rooms={rooms} selectedId={room.pkg.id} onSelect={selectPackage} />
+      </div>
       <RoomBanner room={room} isAdmin={isAdmin} onChanged={reload} />
 
       <ActionFeedback actions={actions} />

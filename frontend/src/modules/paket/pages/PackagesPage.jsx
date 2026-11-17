@@ -170,15 +170,16 @@ export default function PackagesPage() {
         title={isOwner ? 'Kelola Paket' : 'Paket'}
         code="T-07"
         actions={
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2.5 sm:w-auto">
             <SegmentedControl
               label="Filter status paket"
+              className="max-sm:grid max-sm:w-full max-sm:grid-cols-3 max-sm:[&>button]:px-1.5 max-sm:[&>button]:whitespace-normal"
               options={FILTER_OPTIONS}
               value={filter}
               onChange={setFilter}
             />
             {isOwner && (
-              <Button variant="primary" onClick={() => openEditor('new')}>
+              <Button variant="primary" className="max-sm:min-h-11 max-sm:w-full" onClick={() => openEditor('new')}>
                 <Plus aria-hidden="true" className="h-4 w-4" />
                 Paket Baru
               </Button>

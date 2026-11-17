@@ -151,7 +151,7 @@ export default function AddonManager({ addons = [], usage = {}, onChanged }) {
       )}
       {success && <Alert variant="success">{success}</Alert>}
 
-      <form onSubmit={handleCreate} noValidate className="grid gap-4 sm:grid-cols-12 sm:items-start">
+      <form onSubmit={handleCreate} noValidate className="grid grid-cols-1 gap-4 sm:grid-cols-12 sm:items-start">
         <Input
           className="sm:col-span-4"
           label="Nama *"
@@ -223,7 +223,7 @@ export default function AddonManager({ addons = [], usage = {}, onChanged }) {
                     onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
                     className={`${ROW_INPUT} w-28 ${editErrors.price ? 'border-red-300' : ''}`}
                   />
-                  <div className="w-56">
+                  <div className="w-full max-w-56">
                     <PerFields compact form={editForm} errors={editErrors} onChange={setEditForm} />
                   </div>
                   <Button size="sm" variant="primary" loading={busy === 'update'} onClick={() => handleUpdate(addon.id)}>

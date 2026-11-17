@@ -55,15 +55,15 @@ export default function HistoryList({ rows, packages, search, onSearch, onOpen, 
               <button
                 type="button"
                 onClick={() => onOpen(row)}
-                className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-3 text-left transition hover:bg-slate-50 sm:grid-cols-[5.5rem_minmax(0,1fr)_8rem_6.5rem] sm:gap-x-4"
+                className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,auto)] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-3 text-left transition hover:bg-slate-50 sm:grid-cols-[5.5rem_minmax(0,1fr)_8rem_6.5rem] sm:gap-x-4"
               >
-                <span className="font-bold text-brand-600">{queueLabel(row) ?? '—'}</span>
+                <span className="col-span-2 text-xs font-bold text-brand-600 sm:col-span-1 sm:text-base">{queueLabel(row) ?? '—'}</span>
                 <span className="min-w-0">
-                  <span className="block truncate font-semibold text-slate-800">{row.customer_name}</span>
-                  <span className="block truncate text-xs text-slate-500">{meta(row, packages.get(row.package_id))}</span>
+                  <span className="block wrap-anywhere font-semibold text-slate-800 sm:truncate">{row.customer_name}</span>
+                  <span className="block wrap-anywhere text-xs text-slate-500 sm:truncate">{meta(row, packages.get(row.package_id))}</span>
                 </span>
-                <span className="text-right font-bold whitespace-nowrap text-slate-800">{formatRupiah(row.total)}</span>
-                <span className="col-start-3 justify-self-end sm:col-start-auto sm:justify-self-start">
+                <span className="text-right text-sm font-bold wrap-anywhere text-slate-800 sm:text-base sm:whitespace-nowrap">{formatRupiah(row.total)}</span>
+                <span className="col-start-2 justify-self-end sm:col-start-auto sm:justify-self-start">
                   <Badge tone={VISIT_STATUS_TONES[row.status]}>{VISIT_STATUS_LABELS[row.status]}</Badge>
                 </span>
               </button>

@@ -1,5 +1,5 @@
 import { CalendarRange } from 'lucide-react'
-import { Button, Input, SegmentedControl } from '@/shared/components/ui'
+import { Button, Input, SegmentedControl, Select } from '@/shared/components/ui'
 import { REPORT_PERIODS } from '@/shared/utils/constants'
 
 const PERIOD_OPTIONS = Object.entries(REPORT_PERIODS).map(([value, label]) => ({
@@ -17,11 +17,22 @@ export default function PeriodFilter({
   onToChange,
   onApplyCustom,
   loading = false,
+  mobileSelect = false,
 }) {
   return (
     <div className="flex flex-col items-stretch gap-3 sm:items-end">
+      {mobileSelect && (
+        <Select
+          className="min-w-0 sm:hidden"
+          label="Periode"
+          options={PERIOD_OPTIONS}
+          value={period}
+          onChange={(event) => onPeriodChange(event.target.value)}
+        />
+      )}
       <SegmentedControl
         label="Periode laporan"
+        className={mobileSelect ? 'max-sm:hidden' : 'max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:whitespace-normal'}
         options={PERIOD_OPTIONS}
         value={period}
         onChange={onPeriodChange}
@@ -35,7 +46,7 @@ export default function PeriodFilter({
           }}
           className="flex flex-wrap items-end gap-2.5 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs"
         >
-          <div className="min-w-36 flex-1 sm:flex-initial">
+          <div className="min-w-0 basis-full sm:basis-auto">
             <Input
               label="Dari Tanggal"
               type="date"
@@ -43,7 +54,7 @@ export default function PeriodFilter({
               onChange={(event) => onFromChange(event.target.value)}
             />
           </div>
-          <div className="min-w-36 flex-1 sm:flex-initial">
+          <div className="min-w-0 basis-full sm:basis-auto">
             <Input
               label="Sampai Tanggal"
               type="date"
