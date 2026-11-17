@@ -24,7 +24,7 @@ JWT maksimal 12 jam dan sesi idle maksimal 30 menit. Token saja tidak cukup: bac
 | GET | `/packages` | Admin/Owner; hasil `{ packages, backgrounds, allowed_addons }` |
 | GET | `/addons` | Admin/Owner |
 | POST | `/packages` | Owner |
-| PUT | `/packages/:id` | Owner; body lengkap |
+| PUT | `/packages/:id` | Owner; body lengkap. Menonaktifkan (`is_active: false`) paket yang masih dipakai → 409 `PACKAGE_IN_USE` (lihat bawah) |
 | PATCH | `/packages/:id/availability` | Admin: `{ is_open, reason? }`; alasan wajib saat menutup |
 | POST | `/addons` | Owner |
 | PUT | `/addons/:id` | Owner; body lengkap |
@@ -61,11 +61,17 @@ Latar dengan `id` diubah (harus milik paket itu, `BACKGROUND_MISMATCH` bila tida
 
 Paket dan latar tidak punya endpoint hapus; nonaktifkan untuk menjaga transaksi historis. Saat mengganti paket kunjungan, kosongkan tambahan paket lama terlebih dahulu.
 
+**Paket yang masih dipakai tidak bisa dinonaktifkan** (sejak 17 Nov 2026), baik lewat `PUT /packages/:id` maupun `PUT /packages/:id/setup`.
+- "Dipakai" = ada kunjungan paket itu berstatus MENUNGGU, DIPANGGIL, SEDANG_DILAYANI, DILEWATI, atau RESERVASI (tanggal berapa pun, termasuk reservasi terlewat).
+- Ditolak dengan 409 `PACKAGE_IN_USE`, contoh pesan: "Premium Studio masih dipakai: 1 sedang foto, 2 reservasi belum datang. Selesaikan sesi/antreannya dan batalkan atau pindahkan reservasinya dulu."
+- Alasannya: paket nonaktif disembunyikan dari papan Antrean dan Pendaftaran, sehingga sesinya tidak bisa dijangkau lagi (termasuk tombol Selesai).
+- Kunjungan Selesai/Dibatalkan tidak dihitung. Mengaktifkan dan mengubah isian lain tidak terpengaruh.
+
 ## Kunjungan, antrean, dan riwayat
 
 | Method | Endpoint | Body / hasil |
 |---|---|---|
-| GET | `/visits?date=2026-11-11&history=false&page=1&search=nama` | Admin/Owner, maksimal 100 per halaman. `history=true` hanya selesai/batal (Riwayat, tanggal mana pun untuk kedua peran). Alternatif rentang `from` dan `to` maksimal 367 hari. |
+| GET | `/visits?date=2026-11-11&history=false&page=1&search=nama` | Admin/Owner, maksimal 100 per halaman. Tiap baris: kolom `visits` + `transaction_id, transaction_no, total, payment_status, transaction_version` + **`paid`** (uang bersih = pembayaran − refund; kartu Reservasi menampilkan "Sisa" = `total − paid`). `history=true` hanya selesai/batal (Riwayat, tanggal mana pun untuk kedua peran); **reservasi yang dibatalkan sebelum datang** (belum punya nomor antrean) dicatat pada **tanggal pembatalannya** (`transactions.cancelled_at`), yang lain pada `service_date`. Alternatif rentang `from` dan `to` maksimal 367 hari. |
 | GET | `/visits/:id` | Detail lengkap |
 | GET | `/queue/rooms` | Kondisi ruang dan pelanggan dipanggil/berjalan: `package_id,name,is_open,closed_reason,active_visit_id,customer_name,customer_type,status,service_date,queue_code_snapshot,queue_number,started_at,session_minutes` |
 | POST | `/visits/walk-in` | Admin; **tab Di Tempat**: daftar + tambahan + bayar **lunas** dalam satu transaksi DB (lihat bawah) |
@@ -219,7 +225,7 @@ Aksi `CONFIRM` dan field `priority` sudah dihapus (17 Nov 2026); reservasi masuk
 | POST | `/transactions/:id/refunds` | Admin: `{ client_request_id, amount, method, reason }` |
 | POST | `/transactions/:id/corrections` | Admin; koreksi dengan audit, lihat bawah |
 | GET | `/transactions/:id/audit` | Admin/Owner; perubahan transaksi dan kunjungannya |
-| GET | `/transactions/:id/receipt.pdf` | Admin/Owner; tersedia sejak **lunas** (`paid_off_at`); nomor antrean (`RG-001`/`RG-R001`) dicetak besar di atas; reservasi ikut mencetak jadwalnya |
+| GET | `/transactions/:id/receipt.pdf` | Admin/Owner; tersedia bila sesi **SELESAI** atau **lunas penuh**: `paid_off_at` terisi **dan** uang bersih ≥ jumlah rincian aktif. Selain itu 409 `RECEIPT_NOT_READY` (mis. reservasi lunas yang naik paket sebelum sisanya dibayar, atau batal setelah naik paket). Nomor antrean (`RG-001`/`RG-R001`) dicetak besar di atas; reservasi ikut mencetak jadwalnya |
 
 Pembayaran:
 
