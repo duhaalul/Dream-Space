@@ -11,7 +11,8 @@ import {
 } from 'recharts'
 import { formatRupiah } from '@/shared/utils/format'
 
-const DEFAULT_HOURS = ['09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20']
+// Jam operasional studio 13.00–21.00 WIB.
+const DEFAULT_HOURS = ['13', '14', '15', '16', '17', '18', '19', '20']
 
 function formatAxisCompact(value) {
   const num = Number(value || 0)
@@ -39,12 +40,12 @@ function buildChartData(rows, from, to) {
     for (const h of DEFAULT_HOURS) totalsByHour.set(h, { total: 0, count: 0 })
 
     for (const row of rows) {
-      const timePart = String(row.completed_at ?? '').split(' ')[1] ?? ''
+      const timePart = String(row.paid_at ?? '').split(' ')[1] ?? ''
       const hour = timePart.slice(0, 2)
       if (!hour) continue
       const current = totalsByHour.get(hour) ?? { total: 0, count: 0 }
       totalsByHour.set(hour, {
-        total: current.total + Number(row.total ?? 0),
+        total: current.total + Number(row.amount ?? 0),
         count: current.count + 1,
       })
     }
@@ -72,11 +73,11 @@ function buildChartData(rows, from, to) {
   }
 
   for (const row of rows) {
-    const datePart = String(row.completed_at ?? '').split(' ')[0]
+    const datePart = String(row.paid_at ?? '').split(' ')[0]
     if (!datePart) continue
     const current = byDate.get(datePart) ?? { total: 0, count: 0 }
     byDate.set(datePart, {
-      total: current.total + Number(row.total ?? 0),
+      total: current.total + Number(row.amount ?? 0),
       count: current.count + 1,
     })
   }

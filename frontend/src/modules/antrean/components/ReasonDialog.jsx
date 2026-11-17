@@ -1,12 +1,15 @@
 import { useId, useState } from 'react'
+import { ArrowLeft, SkipForward, Undo2, XCircle } from 'lucide-react'
 import { Button, Input, Modal } from '@/shared/components/ui'
 
 const MIN_REASON = 3 // backend: reason minimal 3 karakter
+const ICONS = { SKIP: SkipForward, RETURN: Undo2, CANCEL: XCircle }
 
-// Dialog alasan untuk Lewati, Kembalikan, Batalkan, dan Panggil di luar urutan.
-// config: { title, description, confirmLabel, variant, placeholder } dari useVisitActions.
+// Dialog alasan untuk Lewati, Kembalikan, dan Batalkan (termasuk membatalkan reservasi).
+// config: { action, title, description?, confirmLabel, variant, placeholder } dari useVisitActions.
 // Pasang dengan key berbeda per kunjungan+tindakan supaya isian alasan selalu mulai kosong.
 export default function ReasonDialog({ config, busy, onCancel, onConfirm }) {
+  const ConfirmIcon = ICONS[config.action]
   const formId = useId()
   const [reason, setReason] = useState('')
   const [error, setError] = useState(null)
@@ -29,16 +32,16 @@ export default function ReasonDialog({ config, busy, onCancel, onConfirm }) {
       footer={
         <>
           <Button variant="neutral" onClick={onCancel} disabled={busy}>
-            Batal
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" /> Kembali
           </Button>
           <Button type="submit" form={formId} variant={config.variant} loading={busy}>
-            {config.confirmLabel}
+            {!busy && ConfirmIcon && <ConfirmIcon aria-hidden="true" className="h-4 w-4" />} {config.confirmLabel}
           </Button>
         </>
       }
     >
       <form id={formId} noValidate onSubmit={submit} className="space-y-4">
-        <p className="text-sm text-slate-600">{config.description}</p>
+        {config.description && <p className="text-sm text-slate-600">{config.description}</p>}
         <Input
           label="Alasan *"
           placeholder={config.placeholder}

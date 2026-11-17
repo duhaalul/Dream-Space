@@ -1,139 +1,143 @@
 # Modul Antrean
 
-Pegangan kerja modul **Antrean Layanan** (SRS 4.1–4.3, 5.1). Aturan umum ada di [README frontend](../../../README.md).
+Pegangan kerja modul **Antrean Layanan**. Aturan umum ada di [README frontend](../../../README.md).
 
 ## Tujuan
-Mencatat reservasi WhatsApp dan pelanggan datang langsung, menampilkan antrean per paket, dan menjalankan sesi: panggil, mulai foto, lewati, kembalikan, batalkan.
-FR-03, FR-04, FR-05, FR-08 · UC-07 s.d. UC-12, UC-16.
+Menampilkan antrean per paket dan menjalankan sesi: panggil, mulai foto (dengan **timer**), lewati, kembalikan, batalkan, **selesai**.
+Di bawahnya ada bagian **Reservasi**: pelanggan reservasi yang belum datang (per tanggal), dengan tombol **Sudah Datang**.
+Pendaftaran pelanggan (Di Tempat & Reservasi) ada di menu **Pendaftaran** (modul `kasir`).
 
 ## Penanggung jawab
 **Ihsan**
 
 ## Halaman & komponen
-Satu halaman `/antrean` dengan 3 tab (tab aktif disimpan di URL `?tab=`). Tab bawaan **Per Paket** (`?paket=RG` = paket terpilih).
-Admin juga punya tombol header "+ Reservasi WhatsApp" / "+ Datang Langsung (Walk-in)" → tab Pendaftaran dengan kursor di kolom nama (`?form=reservasi|walkin`).
+Satu halaman `/antrean` (tanpa tab): kartu paket → banner ruangan → Di Ruangan, Menunggu, Dilewati → **Reservasi**. Paket terpilih disimpan di URL (`?paket=RG`).
 
-| File | Layar di Figma | Peran | Status |
-|---|---|---|---|
-| `pages/QueuePage.jsx` | Antrean (wadah tab + tombol header) | Admin; Owner lihat | Selesai |
-| `components/QueueOverview.jsx` | Antrean › ringkasan (`UIUX/PNG/02_…` bagian State Antrean Admin): kunjungan hari sebelumnya, perlu tindakan, reservasi hari ini, ruangan ditutup | Admin; Owner lihat | Selesai |
-| `components/VisitActionButtons.jsx` | tombol tindakan per status (dipakai Per Paket & Ringkasan) | Admin | Selesai |
-| `components/BoardParts.jsx` | `Section`, `EmptyNote`, `RefreshButton`, `QueueLoading`, `ActionFeedback` (pesan + dialog alasan) | — | Selesai |
-| `components/QueueBoard.jsx` | Antrean › per paket (`UIUX/PNG/03_…`) | Admin; Owner lihat | Selesai |
-| `components/PackageTiles.jsx` | deretan kartu paket (Kosong/Dipanggil/Dipakai/Ditutup) | Admin; Owner lihat | Selesai |
-| `components/RoomBanner.jsx` | banner ruangan + Tutup/Buka Ruangan (Admin) | Admin; Owner lihat | Selesai |
-| `components/VisitCard.jsx` | kartu pelanggan + kotak nomor antrean | Admin; Owner lihat | Selesai |
-| `components/ReasonDialog.jsx` | dialog alasan (Lewati, Kembalikan, Batalkan, Panggil di luar urutan) | Admin | Selesai |
-| `useQueueData.js` | muat paket + kunjungan hari ini (opsional: kunjungan aktif 60 hari sebelumnya), perbarui otomatis tiap 15 detik | — | Selesai |
-| `useVisitActions.js` | jalankan tindakan (`runVisitAction`) + pesan sukses/error | — | Selesai |
-| `queue.js` | logika papan: `buildBoard`, `visitMeta`, `ticketFor`, `formatQueueNumber`, `appointmentDue` | — | Selesai |
-| `components/VisitForm.jsx` | Antrean › Pendaftaran (`UIUX/PNG/04_…`) | Admin | Selesai |
-| `components/WalkInForm.jsx` | kartu Pendaftaran Datang Langsung | Admin | Selesai |
-| `components/ReservationForm.jsx` | kartu Reservasi WhatsApp (Booking) + DP | Admin | Selesai |
-| `components/PackageFields.jsx` | kolom Paket, Latar, Jumlah Orang + info Kapasitas Ruangan (dipakai ulang di modal ubah) | Admin | Selesai |
-| `components/EstimateBox.jsx` | kotak biru Estimasi Tagihan | Admin | Selesai |
-| `visitForm.js` | logika form: estimasi harga, batas orang, validasi, jam janji, peta error | — | Selesai |
-| `components/VisitDetailModal.jsx` | (modal, tombol "Detail" di Per Paket & Ringkasan) detail, tagihan, riwayat status; Admin: ubah/lengkapi paket, koreksi nama, batalkan | Admin; Owner lihat | Selesai |
-| `components/EditSelectionForm.jsx` | ubah paket/latar/jumlah orang + alasan (hanya Reservasi/Menunggu) | Admin | Selesai |
-| `components/RenameForm.jsx` | koreksi nama panggilan lewat `addCorrection` (tercatat di audit) | Admin | Selesai |
-| `components/VisitTimeline.jsx` | riwayat status dari `events` | Admin; Owner lihat | Selesai |
+| File | Isi | Peran |
+|---|---|---|
+| `pages/QueuePage.jsx` | wadah halaman | Admin; Owner lihat |
+| `components/QueueBoard.jsx` | papan per paket + bagian Reservasi + pop-up (Detail, Sudah Datang, Ubah Reservasi) | Admin; Owner lihat |
+| `components/ReservationSection.jsx` | bagian Reservasi: pilihan tanggal, kartu (jam, nama, "Paket · N orang"/"Belum pilih paket", DP/Lunas) | Admin; Owner lihat |
+| `components/CheckInModal.jsx` | pop-up **Sudah Datang**: chip data reservasi, **tambahan** (boleh ditambah, tidak dikurangi), isian paket (data lama), sisa bayar, **Masuk Antrean** → pop-up Berhasil | Admin |
+| `components/ReservationEditModal.jsx` | pop-up **Ubah Reservasi**: isian sama dengan form Reservasi (`kasir/components/ReservationFields`), rincian Total · Sudah dibayar · Sisa dibayar saat datang / **Dikembalikan** + "Dikembalikan lewat" (Tunai/Transfer), satu Simpan | Admin |
+| `components/PackageTiles.jsx` | kartu paket (Kosong/Dipanggil/Dipakai/Ditutup) + sisa waktu sesi | Admin; Owner lihat |
+| `components/RoomBanner.jsx` | banner ruangan + Tutup/Buka Ruangan (Admin) | Admin; Owner lihat |
+| `components/VisitCard.jsx` | kartu pelanggan + nomor antrean + timer; badge bayar bila belum lunas (atau `badge` khusus) | Admin; Owner lihat |
+| `components/SessionTimer.jsx` | pil sisa waktu "12:30"; merah "Lewat 2:10" bila habis | Admin; Owner lihat |
+| `components/SessionEndNotifier.jsx` | notifikasi kanan bawah saat waktu sesi habis (dipasang di `app/AppLayout.jsx`, semua halaman) | Admin |
+| `components/VisitActionButtons.jsx` | tombol tindakan per status (semua berikon) | Admin |
+| `components/ReasonDialog.jsx` | dialog alasan (Lewati, Kembalikan, Batalkan) | Admin |
+| `components/VisitDetailModal.jsx` | Detail ringkas: jadwal & No. WhatsApp (reservasi), paket, tambahan, pembayaran ("Dibayar … · dikembalikan … · sisa …", Lunas dari `payment_status`), jam daftar, alasan batal; Batalkan, Ubah Reservasi, Cetak Nota | Admin; Owner lihat |
+| `components/BoardParts.jsx` | `Section`, `EmptyNote`, `RefreshButton`, `QueueLoading`, `ActionFeedback` | — |
+| `components/PackageFields.jsx` | Paket, Latar, Jumlah Orang sejajar satu baris (Pendaftaran, Reservasi, Sudah Datang); `PACKAGE_GRID` = lajurnya, dipakai baris lain yang ingin lurus | Admin |
+| `useQueueData.js` | data antrean hari ini, `useReservations(date)`, `useDayVisits(date)`; diperbarui otomatis tiap 15 detik | — |
+| `useVisitActions.js` | jalankan tindakan + pesan sukses/error; memancarkan `QUEUE_CHANGED_EVENT` | — |
+| `useNow.js` | waktu sekarang per detik (untuk timer) | — |
+| `queue.js` | `buildBoard`, `packageQueue`, `queueLabel`/`formatQueueNumber` (`RG-001`, `RG-R001`), `ticketFor`, `visitMeta`, `sessionTimer`, `whatsappNumber` | — |
+| `visitForm.js` | validasi paket/latar/orang, `interpretSaveError` (jam reservasi dihitung backend: `kasir/useReservationSlots.js`) | — |
 
 ## Hak akses
 | Tindakan | Admin | Owner |
 |---|---|---|
-| Melihat ringkasan dan papan per paket | ✓ | ✓ |
-| Tab Pendaftaran, semua tombol tindakan | ✓ | — |
+| Melihat papan antrean, bagian Reservasi, timer, Detail | ✓ | ✓ |
+| Tombol tindakan, Sudah Datang, Ubah Reservasi, Tutup/Buka Ruangan, notifikasi waktu habis | ✓ | — |
 
 ## API (`api.js`)
 | Fungsi | Endpoint | Dipakai untuk |
 |---|---|---|
-| `getQueueRooms()` | `GET /queue/rooms` | Status ruangan dan pelanggan dipanggil/sedang foto |
-| `getVisits(params)` | `GET /visits` | Daftar kunjungan per tanggal: `{ date, page, search }` |
-| `getVisit(id)` | `GET /visits/:id` | Detail kunjungan (modal) |
-| `createVisit(data)` | `POST /visits` | Pendaftaran datang langsung / reservasi (+ DP opsional) |
-| `updateVisitSelection(id, data)` | `PUT /visits/:id/selection` | Ubah paket/latar/jumlah orang: `{ version, package_id, background_id, persons, reason }` |
-| `runVisitAction(id, data)` | `POST /visits/:id/actions` | Tombol tindakan: `{ version, action, reason?, priority? }` |
+| `getQueueRooms()` | `GET /queue/rooms` | Status ruangan + sesi berjalan (`started_at`, `session_minutes`, `customer_type`) untuk notifikasi |
+| `getVisits(params)` | `GET /visits` | Kunjungan per tanggal: `{ date, page, search }` (termasuk status RESERVASI) |
+| `getVisit(id)` | `GET /visits/:id` | Detail, isi pop-up Sudah Datang |
+| `runVisitAction(id, data)` | `POST /visits/:id/actions` | `{ version, action, reason? }` |
+| `updateVisitSelection` | `PUT /visits/:id/selection` | Belum dipakai (nanti untuk koreksi) |
 
-Dari modul paket: `getPackages()` untuk pilihan paket, latar, dan kapasitas. Contoh body pendaftaran ada di `docs/API.md` (branch backend), bagian Kunjungan.
+Sudah Datang dan Ubah Reservasi memakai `checkInReservation` dan `updateReservation` dari `kasir/api.js`.
 
 ## Tombol per status
 | Status | Tombol (Admin) | `action` |
 |---|---|---|
-| Reservasi | Sudah datang · Batalkan | `CONFIRM` (`priority: true`; antrean biasa = `false` + alasan) · `CANCEL` |
-| Menunggu | **Panggil** · Batalkan | `CALL` (di luar urutan wajib alasan) · `CANCEL` |
-| Dipanggil | **Mulai foto** atau **Lewati** · Batalkan | `START` · `SKIP` (alasan) · `CANCEL` |
-| Sedang dilayani | **Selesaikan sesi** | buka `/kasir/:id`; penyelesaian dilakukan di Kasir |
-| Dilewati | Kembalikan ke antrean · Batalkan | `RETURN` (alasan; masuk paling belakang) · `CANCEL` |
-| Selesai / Dibatalkan | — | tidak tampil di Antrean (ada di Riwayat) |
+| Reservasi (belum datang) | **Sudah Datang** (hanya pada tanggal reservasi) · Batalkan · Detail (Ubah Reservasi) | check-in · `CANCEL` |
+| Menunggu | Panggil · Batalkan | `CALL` (siapa pun, tanpa alasan) · `CANCEL` |
+| Dipanggil | Mulai Foto · Lewati · Batalkan | `START` · `SKIP` (alasan) · `CANCEL` |
+| Sedang foto | **Selesai** (bisa ditekan kapan saja, walau timer masih berjalan) | `FINISH` (wajib lunas) |
+| Dilewati | Kembalikan · Batalkan | `RETURN` (alasan; masuk paling belakang) · `CANCEL` |
+| Selesai / Dibatalkan | — | pindah ke Riwayat |
 
-Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar tidak dikembalikan.
+Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar **tidak dikembalikan** (DP maupun reservasi yang sudah lunas).
+
+## Reservasi, Ubah Reservasi & Sudah Datang
+- Bagian **Reservasi** (paling bawah): **semua paket** pada satu tanggal (bawaan hari ini), urut jam. Pilih tanggal lain untuk melihat reservasi mendatang atau yang belum datang dari hari sebelumnya.
+- Reservasi yang tidak datang **tidak** ditutup otomatis: tetap ada sampai Admin membatalkan atau mengubahnya.
+- **Ubah Reservasi** (Detail › Ubah Reservasi; hanya sebelum datang): nama, No. WA, paket, latar, jumlah orang, tambahan, tanggal & jam dalam satu pop-up.
+  - Pilihan jam dihitung ulang dengan lama pemakaian baru (reservasi itu sendiri tidak dihitung bentrok); jam semula tetap bisa dipilih.
+  - Ganti paket → harga paket sekarang; paket sama → harga saat reservasi.
+  - Total baru > sudah dibayar → **"Sisa dibayar saat datang"** (tidak ada uang berpindah sekarang; status jadi belum lunas).
+  - Total baru < sudah dibayar → **"Dikembalikan RpX"** + pilihan **Dikembalikan lewat** Tunai/Transfer; refund tercatat saat Simpan (masuk Laporan sebagai baris minus).
+- **Sudah Datang** (pop-up, hanya pada tanggal reservasi, jam berapa pun):
+  - data reservasi tampil sebagai chip (jam, paket, Lunas/Dibayar Rp…);
+  - **tambahan boleh ditambah** sebelum masuk Menunggu; yang sudah dipesan tidak bisa dikurangi (kurangi lewat Ubah Reservasi). Paket/latar/orang terkunci;
+  - data lama tanpa paket → isi Paket, Latar, Jumlah Orang, Tambahan (DP lebih besar dari total ditolak);
+  - masih ada sisa → bayar sisa (Tunai/Transfer/QRIS); sudah lunas → langsung;
+  - **Masuk Antrean** → pop-up Berhasil (nomor `RG-R001`, Kembalian, Cetak Nota).
+- Setelah masuk Menunggu semuanya terkunci.
+- Datang di hari lain → Detail › **Ubah Reservasi** ke hari ini dulu.
+
+## Urutan & nomor
+- Menunggu diurutkan backend menurut **jam masuk**: datang langsung = jam daftar; reservasi = **jam reservasinya** (walau terlambat/lebih awal). Kartu menulis "Masuk HH.MM".
+- Nomor per paket per hari: datang langsung `RG-001`, `RG-002`…; reservasi punya urutan sendiri `RG-R001`, `RG-R002`… (diberikan saat Sudah Datang). Jadi nomor tidak selalu sama dengan urutan.
+- Admin bebas memanggil siapa pun di Menunggu tanpa alasan; urutan hanya panduan.
+
+## Timer sesi
+- Durasi = **Durasi Sesi** paket + (jumlah × **Menit Tambahan**) dari tambahan waktu; keduanya diatur Owner di Kelola Paket.
+- Backend menghitung dan menyimpannya di `visit.session_minutes` saat **Mulai Foto**, jadi perubahan katalog tidak mengubah sesi yang sedang berjalan.
+- Paket tanpa durasi → tanpa timer.
+- Waktu habis:
+  - pil berubah merah "Lewat …";
+  - Admin mendapat notifikasi kecil di kanan bawah (semua halaman), berisi tombol **Lihat** (ke paketnya) dan **X**.
+  - Notifikasi hilang bila ditutup atau sesi diselesaikan.
+  - Sesi **tidak** berhenti otomatis.
 
 ## Aturan wajib
-- Antrean per paket. Satu paket hanya menjalankan satu sesi pada satu waktu. Nomor `KODE-001` per paket per hari dibuat backend.
-- Urutan: reservasi yang sudah datang didahulukan (tanpa menghentikan sesi berjalan), lalu urutan masuk. **Ambil urutan dari backend**, jangan menghitung sendiri.
-- "Sudah datang" hanya pada tanggal janji dan setelah jam janji tiba (backend menolak sebelum itu).
-- Reservasi yang belum datang tidak menahan antrean. Tidak ada perkiraan waktu tunggu.
-- **Mulai foto hanya bila tagihan awal lunas.** Kalau ditolak, arahkan ke Kasir.
-- Form hanya mencatat **nama panggilan**, tanpa nomor telepon (NFR-07).
-- Datang langsung wajib paket + jumlah orang. Reservasi wajib tanggal & jam janji (tidak boleh lewat); paket boleh menyusul.
-- Jam janji dipilih per 30 menit, 09.00–20.30 WIB (studio buka 09.00–21.00). Untuk hari ini, jam yang sudah lewat tidak ditampilkan.
-- "Kapasitas Ruangan" hanya **info** (bukan kotak isian): batas orang gabungan paket + latar, dan label Buka/Ditutup. "Buka" berarti ruangan tidak ditutup Admin, bukan berarti sedang kosong.
-- Estimasi tagihan di form hanya perkiraan (`estimateTotal` meniru `priceLines` backend); total resmi = `transaction.total` dari backend.
-- DP (khusus reservasi): **nominal + metode** Tunai/Transfer/QRIS, dan referensi untuk nontunai. **Tanpa** gambar QRIS, nomor rekening, atau unggah bukti transfer.
-- `client_request_id = newRequestId()` sekali per pengisian form; pakai ulang saat mencoba lagi.
+- Antrean per paket; satu paket hanya satu sesi pada satu waktu. Nomor dibuat backend.
+- Urutan diambil dari backend, jangan dihitung sendiri. Tidak ada perkiraan waktu tunggu.
+- Mulai Foto & Selesai hanya bila lunas (Di Tempat lunas saat daftar, reservasi lunas saat Sudah Datang).
 - Kirim `visit.version` terbaru di setiap tindakan.
-- Ubah paket/latar/jumlah orang hanya sebelum dipanggil. Kosongkan tambahan lama sebelum mengganti paket.
-- `updateVisitSelection` **tidak** mengubah nama. Salah ketik nama panggilan diperbaiki lewat koreksi: `addCorrection(transactionId, { version, reason, customer_name })` dari `@/modules/kasir/api` (catatan tim backend, `backend/docs/FRONTEND_INTEGRATION.md`).
-- **Tidak ada** tombol "Tutup Hari Kasir". Saat studio tutup, sisa antrean dibatalkan satu per satu dengan alasan.
+- Kunjungan hari sebelumnya yang sudah masuk antrean tapi lupa ditutup **ditutup otomatis oleh backend**:
+  - Menunggu, Dipanggil, Dilewati → Dibatalkan;
+  - Sedang foto → Selesai.
+  - Karena itu papan hanya menampilkan hari ini.
+- Tampilan ringkas: hanya info penting, tulisan sedikit, setiap tombol berikon.
 
 ## Error yang ditangani khusus
 | Kode | Tindakan di tampilan |
 |---|---|
-| `PAYMENT_REQUIRED_BEFORE_START` | Pesan + tombol "Buka Kasir" ke `/kasir/:id` |
 | `STALE_VERSION` | Data berubah di komputer lain: muat ulang, jangan kirim ulang otomatis |
-| `ROOM_BUSY`, `ROOM_CLOSED` | Ruangan dipakai/ditutup; tombol Panggil sebaiknya sudah nonaktif |
-| `OUT_OF_ORDER_REASON`, `REASON_REQUIRED` | Minta alasan |
-| `APPOINTMENT_NOT_DUE` | Belum tanggal/jam janji |
-| `PAST_APPOINTMENT`, `APPOINTMENT_INVALID` | Jam janji tidak valid |
-| `PACKAGE_REQUIRED`, `PERSONS_REQUIRED`, `PERSONS_LIMIT`, `BACKGROUND_REQUIRED`, `BACKGROUND_CAPACITY`, `PACKAGE_INACTIVE` | Isian paket/latar/jumlah orang salah; tandai kolomnya |
-| `PACKAGE_LOCKED`, `REMOVE_ADDONS_FIRST` | Paket belum bisa diganti |
-| `CANNOT_CANCEL_STARTED` | Sesi sudah mulai, tidak bisa dibatalkan |
-| `WRONG_SERVICE_DATE` | Antrean hari lain tidak bisa dipanggil |
-| `DP_RESERVATION_ONLY`, `REFERENCE_REQUIRED` | DP hanya untuk reservasi; DP nontunai wajib referensi |
-| `IDEMPOTENCY_CONFLICT` | Request ID dipakai untuk data berbeda; isi ulang form |
+| `ROOM_BUSY`, `ROOM_CLOSED` | Ruangan dipakai/ditutup; tombol Panggil nonaktif |
+| `PAYMENT_REQUIRED_BEFORE_START` | Belum lunas |
+| `WRONG_SERVICE_DATE`, `PACKAGE_LOCKED`, `ADDON_DECREASE_NOT_ALLOWED`, `DP_EXCEEDS_TOTAL`, `PAYMENT_NOT_SETTLED` | Pop-up Sudah Datang: pesan di pop-up / kolomnya |
+| `RESERVATION_CLASH`, `REFUND_REQUIRED` | Pop-up Ubah Reservasi: pesan di kolom Jam / di pop-up |
+
+Error lain ditampilkan dengan pesan dari backend.
 
 ## Hubungan dengan modul lain
-- **Memakai dari `paket`:**
-  - `RoomAvailabilityToggle` (`@/modules/paket/components/RoomAvailabilityToggle`) untuk tutup/buka ruangan. Sudah jadi; tinggal dipasang di banner ruangan atau kartu paket. Contoh:
-    ```jsx
-    // room = satu baris dari getQueueRooms(): { package_id, name, is_open (0/1), closed_reason, ... }
-    <RoomAvailabilityToggle packageId={room.package_id} packageName={room.name} isOpen={!!room.is_open} onChanged={reload} />
-    ```
-    Admin melihat "Tutup Ruangan" (dialog alasan) atau "Buka Ruangan"; Owner tidak melihat tombolnya. Contoh langsung: `/dev/komponen`;
-  - `getPackages()` (`@/modules/paket/api`) untuk pilihan paket.
-- **Menuju `kasir`:** tombol "Selesaikan sesi" dan penolakan "Mulai foto" membuka `/kasir/:id` (`id` = id kunjungan).
-
-## Checklist selesai
-- [x] Ringkasan: reservasi hari ini + tombol Sudah datang, ruangan ditutup
-- [x] Papan per paket: sedang foto, urutan menunggu, dilewati, reservasi belum datang
-- [x] Tombol mengikuti status (tabel di atas) + dialog alasan
-- [x] Form datang langsung dan reservasi (+ DP)
-- [x] Modal detail: ubah dan batalkan
-- [x] Owner hanya melihat (tanpa tab Pendaftaran dan tombol)
-- [x] Tombol simpan/aksi memakai `loading` (anti klik ganda)
-- [x] `npm run build` dan `npm run lint` lulus
-- [ ] Semua langkah uji di bawah lulus
+- **Ke `kasir`:** Pendaftaran memakai `PackageFields`, `useDayVisits`, `packageQueue`, `interpretSaveError`; Detail memakai `downloadReceipt`.
+- **Dari `kasir`:** `CheckInModal` memakai `checkInReservation`, `useCatalog`, `BillSummary`, `PaymentFields`, `RegistrationSuccess`, `AddonPicker`, `PackageSummary`; `ReservationEditModal` memakai `updateReservation`, `ReservationFields`, `useReservationTime`, `editBillPreview`, `BillSummary`.
+- **Dari `paket`:** `getPackages()` (termasuk `duration_minutes`), `getAddons()` (termasuk `extra_minutes`), dan `RoomAvailabilityToggle`.
+- **`app/AppLayout.jsx`** memasang `SessionEndNotifier` untuk Admin.
 
 ## Cara mengetes
-1. Daftarkan pelanggan datang langsung → muncul di papan paketnya dengan nomor `RG-xxx`.
-2. Catat reservasi + DP Transfer tanpa referensi → ditolak; dengan referensi → tersimpan.
-3. "Sudah datang" sebelum jam janji → ditolak; setelah jam janji → masuk antrean dengan prioritas.
-4. Panggil → Mulai foto saat belum lunas → pesan + tombol ke Kasir.
-5. Lewati tanpa alasan → ditolak. Kembalikan → masuk paling belakang.
-6. Buka Antrean di 2 browser, lakukan tindakan di satu browser → browser lain mendapat pesan data berubah.
-7. Login Owner → hanya melihat, tanpa tab Pendaftaran dan tombol.
-8. Tekan Simpan dua kali dengan cepat → hanya 1 kunjungan tercatat.
+1. Daftarkan pelanggan di Pendaftaran › Di Tempat → muncul di papan paketnya (Menunggu) dengan nomor `RG-xxx`.
+2. Panggil → Mulai Foto → pil timer berjalan di kartu dan di kartu paket → Selesai → muncul di Riwayat.
+3. Isi Durasi Sesi paket 1 menit → Mulai Foto → setelah 1 menit pil merah "Lewat" dan notifikasi muncul di kanan bawah (juga di halaman Pendaftaran). X menutupnya; Selesai menghapusnya.
+4. Panggil pelanggan kedua di Menunggu → langsung dipanggil tanpa dialog alasan. Lewati tanpa alasan → ditolak. Kembalikan → masuk paling belakang.
+5. Buat reservasi (Pendaftaran › Reservasi) untuk hari ini → muncul di bagian Reservasi. Sudah Datang (paket + DP) → bayar sisa tunai → nomor `RG-R001`, kartu Menunggu "Masuk <jam reservasi>".
+6. Ganti tanggal bagian Reservasi ke besok → tanpa tombol Sudah Datang. Detail › Ubah Reservasi ke hari ini → pindah ke hari ini. Batalkan → hilang dari Reservasi, masuk Riwayat.
+7. Reservasi lunas → Ubah Reservasi, hapus tambahan → "Dikembalikan Rp…" + Dikembalikan lewat Tunai → Simpan → Laporan punya baris Refund minus. Naikkan paket → "Sisa dibayar saat datang" → Sudah Datang menagih sisanya.
+8. Sudah Datang → tambah 1 tambahan → Total & Sisa naik; tombol − tidak bisa di bawah jumlah yang sudah dipesan.
+9. Login Owner → hanya melihat (Detail), tanpa tombol tindakan, Sudah Datang, Ubah Reservasi, dan notifikasi.
 
-## Keterbatasan saat ini
-- SRS menyebut "ubah jam janji" reservasi, tetapi backend belum punya endpoint untuk mengubah `appointment_at`. Untuk sementara: batalkan reservasi (alasan) lalu catat ulang.
-- Peringatan "kunjungan hari sebelumnya" di Ringkasan belum teruji dengan data nyata (backend tidak mengizinkan membuat kunjungan bertanggal lampau).
+Uji otomatis UI: `tools/ui-test/uji-reservasi.mjs` (di luar repo).
+
+## Belum dibuat / ditunda
+- **Koreksi** setelah masuk Menunggu (ganti paket/tambahan, koreksi nama, salah metode bayar): ditunda ke fitur koreksi.
+- Pengingat reservasi yang lewat tanggal tanpa datang (sekarang dilihat lewat pilihan tanggal).

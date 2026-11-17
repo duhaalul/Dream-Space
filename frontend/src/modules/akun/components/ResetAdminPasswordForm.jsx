@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Alert, Button, Input } from '@/shared/components/ui'
+import { RotateCcwKey } from 'lucide-react'
+import { Alert, Button, PasswordInput } from '@/shared/components/ui'
 import { resetAdminPassword } from '../api'
 import { validateNewPassword } from '../passwordRules'
 
@@ -46,25 +47,23 @@ export default function ResetAdminPasswordForm() {
           {error.message}
         </Alert>
       )}
-      <Input
+      <PasswordInput
         label="Kata sandi sementara"
-        type="password"
         value={form.password}
         onChange={update('password')}
         autoComplete="new-password"
         hint="Minimal 12 karakter."
         required
       />
-      <Input
+      <PasswordInput
         label="Ulangi kata sandi sementara"
-        type="password"
         value={form.confirm}
         onChange={update('confirm')}
         autoComplete="new-password"
         required
       />
       <Button type="submit" variant="danger" loading={loading}>
-        Reset kata sandi Admin
+        {!loading && <RotateCcwKey aria-hidden="true" className="h-4 w-4" />} Reset kata sandi Admin
       </Button>
     </form>
   )

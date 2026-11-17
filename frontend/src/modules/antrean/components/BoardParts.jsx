@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router'
 import { RefreshCw } from 'lucide-react'
 import { Alert, Button, Card } from '@/shared/components/ui'
 import ReasonDialog from './ReasonDialog'
@@ -60,23 +59,14 @@ export function EmptyNote({ children }) {
   )
 }
 
-// Pesan hasil tindakan (sukses/gagal, + tombol Buka Kasir bila belum lunas) dan dialog alasan.
-// actions = hasil useVisitActions().
+// Pesan hasil tindakan (sukses/gagal) dan dialog alasan. actions = hasil useVisitActions().
 export function ActionFeedback({ actions }) {
-  const navigate = useNavigate()
   const { notice, dialog } = actions
   return (
     <>
       {notice && (
         <Alert variant={notice.variant} requestId={notice.requestId}>
-          <span>{notice.message}</span>
-          {notice.kasirVisitId && (
-            <div className="mt-2">
-              <Button size="sm" variant="soft" onClick={() => navigate(`/kasir/${notice.kasirVisitId}`)}>
-                Buka Kasir
-              </Button>
-            </div>
-          )}
+          {notice.message}
         </Alert>
       )}
       {dialog && (

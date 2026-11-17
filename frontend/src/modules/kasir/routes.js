@@ -1,17 +1,17 @@
 import { lazy } from 'react'
-import { CreditCard, History } from 'lucide-react'
+import { History, UserPlus } from 'lucide-react'
 import { ROLES } from '@/shared/utils/constants'
 
-const CashierPage = lazy(() => import('./pages/CashierPage'))
+const RegistrationPage = lazy(() => import('./pages/RegistrationPage'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 
 export const kasirRoutes = [
-  // /kasir = daftar pelanggan aktif; /kasir/:id = pelanggan terpilih (mis. dari tombol di Antrean).
+  // Pendaftaran = daftar + bayar lunas di awal (halaman pertama Admin).
   {
-    path: '/kasir/:id?',
-    component: CashierPage,
+    path: '/pendaftaran',
+    component: RegistrationPage,
     roles: [ROLES.ADMIN],
-    menu: { label: 'Kasir', order: 30, to: '/kasir', icon: CreditCard },
+    menu: { label: 'Pendaftaran', order: 5, icon: UserPlus },
   },
   {
     path: '/riwayat',

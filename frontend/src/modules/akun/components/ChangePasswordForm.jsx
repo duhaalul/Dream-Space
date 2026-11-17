@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Alert, Button, Input } from '@/shared/components/ui'
+import { KeyRound } from 'lucide-react'
+import { Alert, Button, PasswordInput } from '@/shared/components/ui'
 import { changePassword } from '../api'
 import { validateNewPassword } from '../passwordRules'
 
@@ -38,33 +39,30 @@ export default function ChangePasswordForm({ onChanged }) {
           {error.message}
         </Alert>
       )}
-      <Input
+      <PasswordInput
         label="Kata sandi saat ini"
-        type="password"
         value={form.current}
         onChange={update('current')}
         autoComplete="current-password"
         required
       />
-      <Input
+      <PasswordInput
         label="Kata sandi baru"
-        type="password"
         value={form.next}
         onChange={update('next')}
         autoComplete="new-password"
         hint="Minimal 12 karakter."
         required
       />
-      <Input
+      <PasswordInput
         label="Ulangi kata sandi baru"
-        type="password"
         value={form.confirm}
         onChange={update('confirm')}
         autoComplete="new-password"
         required
       />
       <Button type="submit" loading={loading}>
-        Ganti kata sandi
+        {!loading && <KeyRound aria-hidden="true" className="h-4 w-4" />} Ganti kata sandi
       </Button>
     </form>
   )

@@ -54,7 +54,7 @@ npm run test:integration
 
 Integration test mensyaratkan `NODE_ENV=test` dan nama database berakhiran `_test`. `TEST_RESET=1` menghapus tabel pada schema test tersebut sebelum pengujian. Jangan memakai schema usaha.
 
-Suite: 2 unit test + 14 integration test. Salah satunya membangun modul API dari `../frontend/src` ke file sementara dalam `.local/`, kemudian menjalankannya melalui fetch HTTP ke backend dengan database test sungguhan. Tidak mengubah file frontend dan tidak memerlukan instalasi dependensi React. Jika frontend berada di lokasi lain, set `FRONTEND_DIR` ke lokasi folder frontend sebelum menjalankan test.
+Suite: 2 unit test + 22 integration test. Salah satunya membangun modul API dari `../frontend/src` ke file sementara dalam `.local/`, kemudian menjalankannya melalui fetch HTTP ke backend dengan database test sungguhan. Tidak mengubah file frontend dan tidak memerlukan instalasi dependensi React. Jika frontend berada di lokasi lain, set `FRONTEND_DIR` ke lokasi folder frontend sebelum menjalankan test.
 
 ## Dokumentasi
 

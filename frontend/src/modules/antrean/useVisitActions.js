@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { VISIT_ACTIONS } from '@/shared/utils/constants'
 import { runVisitAction } from './api'
 import { queueLabel } from './queue'
 
@@ -9,45 +8,39 @@ const nameOf = (visit) => {
 }
 
 const SUCCESS = {
-  CONFIRM: (visit) => `${visit.customer_name} sudah datang dan masuk antrean.`,
   CALL: (visit) => `${nameOf(visit)} dipanggil.`,
   START: (visit) => `Sesi foto ${nameOf(visit)} dimulai.`,
   SKIP: (visit) => `${nameOf(visit)} dilewati.`,
   RETURN: (visit) => `${visit.customer_name} kembali ke antrean paling belakang.`,
-  CANCEL: (visit) => `Kunjungan ${nameOf(visit)} dibatalkan.`,
+  CANCEL: (visit) => `${nameOf(visit)} dibatalkan.`,
+  FINISH: (visit) => `Sesi ${nameOf(visit)} selesai.`,
 }
 
-// Isi dialog alasan untuk tindakan yang wajib alasan (backend: REASON_REQUIRED / OUT_OF_ORDER_REASON).
+// Isi dialog alasan (backend: REASON_REQUIRED). Teks dibuat singkat.
+// Memanggil di luar urutan tidak perlu alasan: siapa yang dipanggil diputuskan Admin.
 function reasonDialog(visit, action) {
   const name = nameOf(visit)
   const configs = {
-    CALL: {
-      title: `Panggil ${name} di luar urutan`,
-      description: 'Pelanggan ini bukan urutan berikutnya. Tulis alasannya, misalnya pelanggan sebelumnya belum ada di studio.',
-      confirmLabel: 'Panggil',
-      variant: 'warning',
-      placeholder: 'Mis. urutan sebelumnya belum datang',
-    },
     SKIP: {
       title: `Lewati ${name}`,
-      description: 'Pelanggan pindah ke daftar Dilewati. Bila kembali, bisa dikembalikan ke antrean paling belakang.',
+      description: null,
       confirmLabel: 'Lewati',
       variant: 'neutral',
-      placeholder: 'Mis. tidak ada di studio saat dipanggil',
+      placeholder: 'Mis. tidak ada di studio',
     },
     RETURN: {
-      title: `Kembalikan ${name} ke antrean`,
-      description: 'Pelanggan masuk antrean paling belakang dan kehilangan prioritas reservasi.',
+      title: `Kembalikan ${name}`,
+      description: 'Masuk antrean paling belakang.',
       confirmLabel: 'Kembalikan',
       variant: 'primary',
-      placeholder: 'Mis. pelanggan sudah kembali ke studio',
+      placeholder: 'Mis. sudah kembali ke studio',
     },
     CANCEL: {
-      title: `Batalkan kunjungan ${name}`,
-      description: 'Hanya bisa sebelum foto dimulai. Uang yang sudah dibayar (termasuk DP) tidak dikembalikan.',
-      confirmLabel: 'Batalkan Kunjungan',
+      title: `Batalkan ${name}`,
+      description: visit.status === 'RESERVASI' ? 'DP/pembayaran tidak dikembalikan.' : 'Uang yang sudah dibayar tidak dikembalikan.',
+      confirmLabel: 'Batalkan',
       variant: 'danger',
-      placeholder: 'Mis. pelanggan membatalkan lewat WhatsApp',
+      placeholder: 'Mis. pelanggan tidak jadi',
     },
   }
   return { visit, action, ...configs[action] }
@@ -55,7 +48,7 @@ function reasonDialog(visit, action) {
 
 function errorNotice(error, visit) {
   if (error?.code === 'PAYMENT_REQUIRED_BEFORE_START') {
-    return { variant: 'warning', message: `${error.message}. Selesaikan pembayaran ${nameOf(visit)} di Kasir.`, kasirVisitId: visit.id }
+    return { variant: 'warning', message: `${nameOf(visit)}: ${error.message}.` }
   }
   if (error?.code === 'STALE_VERSION') {
     return {
@@ -71,37 +64,32 @@ function errorNotice(error, visit) {
 
 // Menjalankan tombol tindakan kunjungan. Selalu mengirim visit.version terbaru;
 // setelah berhasil atau gagal, data dimuat ulang (STALE_VERSION tidak dikirim ulang otomatis).
+// Dipancarkan setelah tindakan berhasil, supaya notifikasi waktu habis langsung diperbarui.
+export const QUEUE_CHANGED_EVENT = 'dreamspace:queue-changed'
+
 export function useVisitActions(reload) {
   const [busyId, setBusyId] = useState(null)
   const [notice, setNotice] = useState(null) // { variant, message, kasirVisitId?, requestId? }
   const [dialog, setDialog] = useState(null)
 
-  async function run(visit, action, { reason, priority } = {}) {
+  async function run(visit, action, { reason } = {}) {
     setBusyId(visit.id)
     setNotice(null)
     try {
-      await runVisitAction(visit.id, {
-        version: visit.version,
-        action,
-        ...(reason ? { reason } : {}),
-        ...(priority !== undefined ? { priority } : {}),
-      })
+      await runVisitAction(visit.id, { version: visit.version, action, ...(reason ? { reason } : {}) })
       setDialog(null)
       setNotice({ variant: 'success', message: SUCCESS[action](visit) })
+      window.dispatchEvent(new Event(QUEUE_CHANGED_EVENT))
     } catch (error) {
-      if (error?.code === 'OUT_OF_ORDER_REASON' && !reason) {
-        setDialog(reasonDialog(visit, VISIT_ACTIONS.CALL))
-      } else {
-        setDialog(null)
-        setNotice(errorNotice(error, visit))
-      }
+      setDialog(null)
+      setNotice(errorNotice(error, visit))
     } finally {
       setBusyId(null)
       reload()
     }
   }
 
-  // Buka dialog alasan (Lewati, Kembalikan, Batalkan, Panggil di luar urutan).
+  // Buka dialog alasan (Lewati, Kembalikan, Batalkan).
   function ask(visit, action) {
     setNotice(null)
     setDialog(reasonDialog(visit, action))

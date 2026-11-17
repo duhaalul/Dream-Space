@@ -37,7 +37,7 @@ npm run dev               # buka http://localhost:5173
 |---|---|---|---|
 | **Ihsan** | Menu samping, komponen dasar, Login, sesi login | `app/`, `shared/`, `modules/akun/` (kecuali halaman Profil) | Admin & Owner |
 | **Ihsan** | Antrean + tombol Tutup/Buka Ruangan | `modules/antrean/`, `modules/paket/components/RoomAvailabilityToggle.jsx` | Admin (mencatat), Owner (lihat) |
-| **Ihsan** | Kasir & Riwayat | `modules/kasir/` | Kasir: Admin · Riwayat: Admin & Owner |
+| **Ihsan** | Pendaftaran & Riwayat | `modules/kasir/` | Pendaftaran: Admin · Riwayat: Admin & Owner |
 | **Larisa** | Paket / Kelola Paket | `modules/paket/` (kecuali `components/RoomAvailabilityToggle.jsx`) | Admin (lihat), Owner (kelola) |
 | **Larisa** | Dashboard & Laporan | `modules/laporan/` | Owner |
 | **Larisa** | Halaman Profil | `modules/akun/pages/ProfilePage.jsx` | Admin & Owner |
@@ -54,8 +54,7 @@ npm run dev               # buka http://localhost:5173
 | Kontrak | Pemilik | Dipakai di |
 |---|---|---|
 | `RoomAvailabilityToggle` dengan props `{ packageId, isOpen, onChanged }` | Ihsan (sudah selesai) | Antrean |
-| `getPackages()` dan `getAddons()` di `modules/paket/api.js` | Larisa | Antrean, Kasir |
-| Alamat `/kasir/:id` (`id` = id kunjungan) | Ihsan | Antrean |
+| `getPackages()` dan `getAddons()` di `modules/paket/api.js` | Larisa | Antrean, Pendaftaran |
 | `useAuth()` → `{ user, logout, ... }`, `user.role` | Ihsan | Semua |
 
 ### 4. Backend & data uji
@@ -117,7 +116,9 @@ Contoh tampilan semua komponen ada di `/dev/komponen`.
 | `StatCard` | `label`, `value`, `hint?`, `icon?`, `tone` (`brand`/`green`) | `<StatCard label="Sesi Selesai" value="3 Sesi" tone="green" />` |
 | `SegmentedControl` | `options: [{ value, label }]`, `value`, `onChange`, `tone` (`success`/`brand`), `label` | Periode laporan, metode bayar, tab |
 | `Table` | `columns: [{ key, header, align?, render? }]`, `rows`, `rowKey?`, `empty?` | Tabel Riwayat dan Laporan |
-| `Input` | `label`, `error?`, `hint?` + atribut `<input>` | `<Input label="Uang Diterima" value={…} onChange={…} />` |
+| `Input` | `label`, `error?`, `hint?`, `trailing?` + atribut `<input>`. `type="number"` otomatis hanya menerima angka (tanpa `e + - . ,`) | `<Input label="Uang Diterima" type="number" value={…} onChange={…} />` |
+| `PasswordInput` | sama dengan `Input`; tombol mata (terbuka = terlihat, dicoret = bintang) | `<PasswordInput label="Kata sandi baru" value={…} onChange={…} />` |
+| `numberGuard()` | untuk `<input type="number">` mentah (bukan `Input`) | `<input type="number" {...numberGuard()} />` |
 | `Select` | `label`, `options: [{ value, label }]`, `placeholder?`, `error?` | `<Select label="Paket" options={…} />` |
 | `Badge` | `tone` (`brand`/`green`/`amber`/`red`/`gray`) | `<Badge tone="amber">Belum Lunas</Badge>` |
 | `Alert` | `variant` (`error`/`success`/`warning`/`info`), `requestId?` | `<Alert variant="error">{error.message}</Alert>` |
@@ -129,11 +130,11 @@ Varian `Button` sesuai desain:
 
 | Varian | Tampilan | Contoh di desain |
 |---|---|---|
-| `primary` | biru gradien | Terima Pembayaran |
-| `success` | hijau toska gradien | Datang Langsung, Mulai Foto, Selesaikan |
+| `primary` | biru gradien | Konfirmasi & Masuk Antrean |
+| `success` | hijau toska gradien | Mulai Foto, Selesai, Cetak Nota |
 | `warning` | oranye-merah gradien | Panggil |
-| `secondary` | putih bergaris | Reservasi WhatsApp |
-| `soft` | biru muda | Ke Kasir, Kembalikan ke Antrean |
+| `secondary` | putih bergaris | Tutup Ruangan |
+| `soft` | biru muda | Kembalikan ke Antrean |
 | `soft-success` | hijau muda | Unduh Excel |
 | `danger` | merah muda | Batalkan, Unduh PDF |
 | `neutral` | abu-abu | Lewati |
@@ -153,7 +154,7 @@ src/
 │   ├── akun/         # Akun dan Pengaturan
 │   ├── paket/        # Paket dan Harga
 │   ├── antrean/      # Antrean Layanan
-│   ├── kasir/        # Kasir dan Pembayaran
+│   ├── kasir/        # Pendaftaran (daftar + bayar) & Riwayat
 │   └── laporan/      # Dashboard dan Laporan
 └── shared/           # dipakai semua modul
     ├── api/client.js     # pemanggil API: token, error, sesi berakhir
@@ -176,15 +177,15 @@ Isi setiap modul:
 |---|---|---|---|
 | `modules/akun` | Akun dan Pengaturan | Login; Profil (ganti kata sandi sendiri, Owner juga reset kata sandi Admin) | `/login`, `/profil` |
 | `modules/paket` | Paket dan Harga | Paket (Admin lihat) / Kelola Paket (Owner, termasuk tambahan layanan) | `/paket` |
-| `modules/antrean` | Antrean Layanan | Antrean: tab Ringkasan, Per Paket, Pendaftaran (Admin); detail kunjungan dalam modal | `/antrean` |
-| `modules/kasir` | Kasir dan Pembayaran | Kasir (Admin), Riwayat (Admin + koreksi, Owner lihat) | `/kasir`, `/kasir/:id`, `/riwayat` |
+| `modules/antrean` | Antrean Layanan | Antrean per paket (satu halaman), timer sesi + notifikasi waktu habis, detail kunjungan dalam modal | `/antrean` |
+| `modules/kasir` | Kasir dan Pembayaran | Pendaftaran = daftar + bayar lunas (Admin), Riwayat (Admin & Owner) | `/pendaftaran`, `/riwayat` |
 | `modules/laporan` | Dashboard dan Laporan | Dashboard, Laporan (Owner) | `/dashboard`, `/laporan` |
 
 Menu per peran:
 
 | Admin | Owner |
 |---|---|
-| Antrean (halaman awal), Kasir, Riwayat, Paket, Profil | Dashboard (halaman awal), Antrean, Riwayat, Kelola Paket, Laporan, Profil |
+| Pendaftaran (halaman awal), Antrean, Riwayat, Paket, Profil | Dashboard (halaman awal), Antrean, Riwayat, Kelola Paket, Laporan, Profil |
 
 Pengaturan (T-10 di SRS) tidak dipakai: tambahan layanan pindah ke Kelola Paket, reset kata sandi Admin pindah ke Profil Owner.
 
@@ -197,7 +198,7 @@ Setiap modul punya README sendiri. **Baca README modul Anda sebelum mulai.** Isi
 | Akun | Ihsan (Login, sesi) · Larisa (halaman Profil) | [src/modules/akun/README.md](src/modules/akun/README.md) |
 | Paket | Larisa | [src/modules/paket/README.md](src/modules/paket/README.md) |
 | Antrean | Ihsan | [src/modules/antrean/README.md](src/modules/antrean/README.md) |
-| Kasir | Ihsan | [src/modules/kasir/README.md](src/modules/kasir/README.md) |
+| Pendaftaran & Riwayat | Ihsan | [src/modules/kasir/README.md](src/modules/kasir/README.md) |
 | Laporan | Larisa | [src/modules/laporan/README.md](src/modules/laporan/README.md) |
 
 Saat bagian selesai, centang checklist di README modul dan ubah kolom Status.
@@ -211,7 +212,7 @@ Bila desain memuat bagian yang endpoint-nya tidak ada di `docs/API.md` (branch b
 4. **Semua panggilan backend lewat `api.js` modul**, jangan `fetch` langsung di halaman.
 5. **Saat menyimpan** (NFR-02, NFR-04):
    - pakai `<Button loading={...}>` supaya tidak terkirim dua kali;
-   - pendaftaran/pembayaran/refund: buat `client_request_id` dengan `newRequestId()` **sekali per tindakan**, pakai ulang saat mencoba lagi;
+   - pendaftaran/pembayaran: buat `client_request_id` dengan `newRequestId()` **sekali per tindakan**, pakai ulang saat mencoba lagi;
    - bila gagal, tampilkan `error.message` dengan `<Alert variant="error">` dan **jangan kosongkan isian**;
    - error `STALE_VERSION`: muat ulang data, jangan kirim ulang otomatis.
 6. **Hak akses di frontend hanya untuk tampilan.** Backend tetap memeriksa setiap permintaan (NFR-01).
@@ -220,7 +221,7 @@ Bila desain memuat bagian yang endpoint-nya tidak ada di `docs/API.md` (branch b
 
 ## Login dan sesi
 
-- Token disimpan di memori (saran `docs/API.md`), jadi **reload halaman = login ulang**.
+- Token disimpan **per tab** (`sessionStorage`): **reload tetap login**, sedangkan tutup tab/browser = logout dan tab baru perlu login lagi. Saat halaman dibuka, token tersimpan dicek dulu ke backend (`GET /auth/me`).
 - Sesi berakhir di backend setelah 30 menit tidak aktif. Permintaan berikutnya mendapat 401 dan pengguna otomatis kembali ke Login.
 - Setiap akun mengganti kata sandinya sendiri di Profil. Owner bisa mereset kata sandi Admin (mis. Admin lupa kata sandi), lalu Admin wajib menggantinya saat login.
 - Akun dengan kata sandi sementara (`must_change_password`) hanya bisa membuka Profil sampai kata sandinya diganti.
@@ -229,15 +230,12 @@ Bila desain memuat bagian yang endpoint-nya tidak ada di `docs/API.md` (branch b
 ## Status
 
 Sudah berfungsi:
-- Login sesuai Figma, logout, penjaga halaman per peran.
-- Menu samping sesuai Figma (komputer) dan bilah atas (HP).
-- Semua komponen dasar sesuai Figma, termasuk `StatCard`, `SegmentedControl`, dan `Table`.
-- Tombol Tutup/Buka Ruangan (`RoomAvailabilityToggle`), siap dipasang di Antrean.
-- Tab di halaman Antrean.
-- Profil: ganti kata sandi; reset kata sandi Admin untuk Owner.
-- Semua fungsi `api.js` sesuai `docs/API.md`.
+- Login, logout, penjaga halaman per peran; menu samping (komputer) dan bilah atas (HP).
+- Pendaftaran: tab Di Tempat (daftar + bayar lunas, pop-up Berhasil + Cetak Nota) dan Reservasi (jadwal, DP/Lunas lewat Transfer/QRIS).
+- Antrean (timer sesi, notifikasi waktu habis, bagian Reservasi + Ubah Reservasi (dengan refund) + Sudah Datang (tambahan boleh ditambah)), Riwayat.
+- Kelola Paket (termasuk durasi sesi & menit tambahan), Dashboard, Laporan (buku kas: DP/Lunas/Refund; Admin hari ini), Profil.
 
-Belum dikerjakan (bertanda TODO): isi tab Antrean, detail kunjungan, Kasir, Riwayat, Kelola Paket, tambahan layanan, Dashboard, Laporan, dan tampilan Profil sesuai Figma.
+Ditunda: koreksi transaksi, aturan DP otomatis.
 
 ## Deploy (Vercel)
 

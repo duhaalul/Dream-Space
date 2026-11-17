@@ -2,42 +2,33 @@ import { useEffect, useState } from 'react'
 import { Printer } from 'lucide-react'
 import { queueLabel } from '@/modules/antrean/queue'
 import { Alert, Badge, Button, Modal } from '@/shared/components/ui'
-import { PAYMENT_METHOD_LABELS, PAYMENT_TYPE_LABELS, VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from '@/shared/utils/constants'
+import { VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from '@/shared/utils/constants'
 import { openBlob } from '@/shared/utils/download'
 import { formatDateTime, formatRupiah } from '@/shared/utils/format'
-import { downloadReceipt, getAudit, getCashierDetail } from '../api'
-import { activeItems, corrections, itemLabel } from '../cashier'
-import AuditList from './AuditList'
+import { downloadReceipt, getTransactionDetail } from '../api'
+import { activeItems, itemLabel, methodLabel, totalChange } from '../cashier'
 
-function Row({ label, value, className = '' }) {
+function Row({ label, value, strong = false }) {
   return (
-    <div className={`flex items-baseline justify-between gap-4 ${className}`}>
-      <span>{label}</span>
-      <span className="shrink-0 font-semibold">{value}</span>
+    <div className={`flex items-baseline justify-between gap-4 ${strong ? 'font-bold text-slate-800' : 'text-sm text-slate-600'}`}>
+      <span className="min-w-0">{label}</span>
+      <span className="shrink-0">{value}</span>
     </div>
   )
 }
 
-// Detail transaksi di Riwayat (Admin & Owner): rincian, pembayaran, cetak ulang nota, riwayat koreksi.
-// Pasang dengan key = visitId.
+// Detail sesi di Riwayat: rincian, pembayaran, alasan batal, cetak ulang nota. Pasang dengan key = visitId.
 export default function TransactionDetailModal({ visitId, onClose }) {
   const [detail, setDetail] = useState(null)
-  const [audit, setAudit] = useState([])
   const [error, setError] = useState(null)
   const [printing, setPrinting] = useState(false)
 
   useEffect(() => {
-    getCashierDetail(visitId)
-      .then(async (data) => {
-        setDetail(data)
-        setAudit(await getAudit(data.transaction.id))
-      })
-      .catch(setError)
+    getTransactionDetail(visitId).then(setDetail).catch(setError)
   }, [visitId])
 
   async function print() {
     setPrinting(true)
-    setError(null)
     try {
       openBlob(await downloadReceipt(detail.transaction.id))
     } catch (err) {
@@ -47,83 +38,71 @@ export default function TransactionDetailModal({ visitId, onClose }) {
     }
   }
 
-  let body = <p className="text-sm text-slate-500">Memuat detail transaksi…</p>
+  let body = <p className="text-sm text-slate-500">Memuat…</p>
   if (detail) {
-    const { visit, transaction, balance, payments, refunds } = detail
+    const { visit, transaction, payments, refunds = [] } = detail
+    const paidAt = transaction.paid_off_at ?? payments.at(-1)?.paid_at
     body = (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-lg font-bold text-slate-800">{visit.customer_name}</p>
-          <Badge tone={VISIT_STATUS_TONES[visit.status]}>{VISIT_STATUS_LABELS[visit.status]}</Badge>
           {queueLabel(visit) && <Badge tone="gray">{queueLabel(visit)}</Badge>}
+          <Badge tone={VISIT_STATUS_TONES[visit.status]}>{VISIT_STATUS_LABELS[visit.status]}</Badge>
         </div>
-        <p className="-mt-3 text-sm text-slate-500">
-          {transaction.transaction_no}
-          {transaction.completed_at && ` · Selesai ${formatDateTime(transaction.completed_at)} WIB`}
-          {transaction.cancelled_at && ` · Dibatalkan ${formatDateTime(transaction.cancelled_at)} WIB`}
-        </p>
-        {visit.cancel_reason && <Alert variant="warning">Alasan batal: {visit.cancel_reason}. Uang yang sudah dibayar tidak dikembalikan.</Alert>}
         {error && (
           <Alert variant="error" requestId={error.requestId}>
             {error.message}
           </Alert>
         )}
 
-        <div className="space-y-2 text-sm text-slate-700">
+        <div className="space-y-1.5">
           {activeItems(detail).map((item) => (
-            <Row key={item.id} label={itemLabel(item, transaction)} value={formatRupiah(item.amount)} />
+            <Row key={item.id} label={itemLabel(item)} value={formatRupiah(item.amount)} />
           ))}
-          <Row className="border-t border-slate-100 pt-2 font-bold text-slate-800" label="Total" value={formatRupiah(transaction.total)} />
-          <Row className="text-emerald-700" label="Diterima bersih" value={formatRupiah(balance.net)} />
+          <div className="border-t border-slate-100 pt-2">
+            <Row strong label="Total" value={formatRupiah(transaction.total)} />
+          </div>
         </div>
 
-        {(payments.length > 0 || refunds.length > 0) && (
-          <div>
-            <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">Pembayaran</p>
-            <ul className="space-y-1.5 text-sm text-slate-600">
-              {payments.map((payment) => (
-                <li key={`p-${payment.id}`} className="flex justify-between gap-3">
-                  <span>
-                    {PAYMENT_TYPE_LABELS[payment.payment_type]} · {PAYMENT_METHOD_LABELS[payment.method]} · {formatDateTime(payment.paid_at)}
-                    {payment.reference && ` · ref ${payment.reference}`}
-                  </span>
-                  <span className="shrink-0 font-semibold text-emerald-700">{formatRupiah(payment.amount)}</span>
-                </li>
-              ))}
-              {refunds.map((refund) => (
-                <li key={`r-${refund.id}`} className="flex justify-between gap-3">
-                  <span>Refund · {PAYMENT_METHOD_LABELS[refund.method]}</span>
-                  <span className="shrink-0 font-semibold text-slate-500">{formatRupiah(-refund.amount)}</span>
-                </li>
-              ))}
-            </ul>
+        {payments.length > 0 && (
+          <div className="space-y-1.5 border-t border-slate-100 pt-3">
+            {payments.map((payment) => (
+              <Row
+                key={payment.id}
+                label={`${payment.payment_type === 'DP' ? 'DP · ' : ''}${methodLabel(payment.method)}`}
+                value={formatRupiah(payment.cash_received ?? payment.amount)}
+              />
+            ))}
+            {/* Uang yang dikembalikan saat turun paket (Ubah Reservasi). */}
+            {refunds.map((refund) => (
+              <Row key={`refund-${refund.id}`} label={`Dikembalikan · ${methodLabel(refund.method)}`} value={formatRupiah(-refund.amount)} />
+            ))}
+            <Row label="Kembalian" value={formatRupiah(totalChange(detail))} />
+            {paidAt && <Row label="Lunas" value={formatDateTime(paidAt)} />}
           </div>
         )}
 
-        <div>
-          <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">Riwayat Koreksi</p>
-          <AuditList entries={corrections(audit)} />
-        </div>
+        {visit.cancel_reason && <Alert variant="warning">Batal: {visit.cancel_reason}</Alert>}
       </div>
     )
   } else if (error) {
     body = (
       <Alert variant="error" requestId={error.requestId}>
-        Detail gagal dimuat. {error.message}
+        {error.message}
       </Alert>
     )
   }
 
+  const canPrint = detail && (detail.transaction.paid_off_at || detail.visit.status === 'SELESAI')
   return (
     <Modal
       open
-      size="lg"
-      title="Detail Transaksi"
+      title="Detail"
       onClose={onClose}
       footer={
-        detail?.visit.status === 'SELESAI' && (
+        canPrint && (
           <Button variant="success" loading={printing} onClick={print}>
-            <Printer aria-hidden="true" className="h-4 w-4" /> Cetak Ulang Nota PDF
+            {!printing && <Printer aria-hidden="true" className="h-4 w-4" />} Cetak Ulang Nota
           </Button>
         )
       }

@@ -4,10 +4,12 @@ import { X } from 'lucide-react'
 const SIZES = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
+  xl: 'max-w-5xl',
 }
 
 // Dialog di tengah layar. Isi yang panjang bisa digulir (judul & tombol bawah tetap terlihat).
-// size: 'md' (bawaan) | 'lg' untuk isi yang lebar (mis. detail kunjungan/transaksi).
+// size: 'md' (bawaan) | 'lg' untuk isi yang lebar (mis. detail kunjungan/transaksi)
+//       | 'xl' untuk form + panel berdampingan (mis. Pelanggan Baru).
 export default function Modal({ open, title, onClose, children, footer, size = 'md' }) {
   useEffect(() => {
     if (!open) return undefined

@@ -1,33 +1,26 @@
 import { useState } from 'react'
-import { Check, Layers, Plus, Sparkles } from 'lucide-react'
-import { Alert, Badge, Button, Card, Input, Select } from '@/shared/components/ui'
+import { Check, Plus, X } from 'lucide-react'
+import { Alert, Button, Input, Modal, Select, numberGuard } from '@/shared/components/ui'
 import { PRICE_TYPE_LABELS } from '@/shared/utils/constants'
 import { formatRupiah } from '@/shared/utils/format'
-import {
-  createBackground,
-  createPackage,
-  setPackageAddons,
-  updateBackground,
-  updatePackage,
-} from '../api'
+import { createPackageSetup, updatePackageSetup } from '../api'
 
-const PRICE_TYPE_OPTIONS = Object.entries(PRICE_TYPE_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}))
+const PRICE_TYPE_OPTIONS = Object.entries(PRICE_TYPE_LABELS).map(([value, label]) => ({ value, label }))
 
 const EMPTY_FORM = {
   name: '',
   queue_code: '',
   price_type: 'PER_KELOMPOK',
-  price: '110000',
-  included_persons: '2',
-  extra_person_price: '30000',
-  min_persons: '1',
-  max_persons: '15',
+  price: '',
+  included_persons: '',
+  extra_person_price: '',
+  min_persons: '',
+  max_persons: '',
+  duration_minutes: '',
   description: '',
-  is_active: true,
 }
+
+const text = (value) => (value == null ? '' : String(value))
 
 function formFromPackage(pkg) {
   if (!pkg) return EMPTY_FORM
@@ -35,38 +28,27 @@ function formFromPackage(pkg) {
     name: pkg.name ?? '',
     queue_code: pkg.queue_code ?? '',
     price_type: pkg.price_type ?? 'PER_SESI',
-    price: String(pkg.price ?? 0),
-    included_persons: pkg.included_persons != null ? String(pkg.included_persons) : '',
-    extra_person_price: pkg.extra_person_price != null ? String(pkg.extra_person_price) : '',
-    min_persons: pkg.min_persons != null ? String(pkg.min_persons) : '',
-    max_persons: pkg.max_persons != null ? String(pkg.max_persons) : '',
+    price: text(pkg.price),
+    included_persons: text(pkg.included_persons),
+    extra_person_price: text(pkg.extra_person_price),
+    min_persons: text(pkg.min_persons),
+    max_persons: text(pkg.max_persons),
+    duration_minutes: text(pkg.duration_minutes),
     description: pkg.description ?? '',
-    is_active: Boolean(pkg.is_active),
   }
 }
 
-function calculatePreview(form, previewPersons) {
-  const persons = Math.max(1, Number(previewPersons) || 1)
-  const price = Math.max(0, Number(form.price) || 0)
-  const type = form.price_type
-  const included =
-    type === 'PER_KELOMPOK' && form.included_persons !== ''
-      ? Math.max(1, Number(form.included_persons) || 1)
-      : null
-  const extraPrice =
-    type === 'PER_KELOMPOK' && form.extra_person_price !== ''
-      ? Math.max(0, Number(form.extra_person_price) || 0)
-      : 0
+let rowSeq = 0
+const rowFromBackground = (bg) => ({
+  key: `bg-${bg.id}`,
+  id: bg.id,
+  name: bg.name ?? '',
+  max_persons: text(bg.max_persons),
+  is_active: Boolean(bg.is_active),
+})
+const newRow = () => ({ key: `new-${(rowSeq += 1)}`, id: null, name: '', max_persons: '', is_active: true })
 
-  const baseQty = type === 'PER_ORANG' ? persons : 1
-  const extraQty = type === 'PER_ORANG' || included === null ? 0 : Math.max(persons - included, 0)
-  const baseTotal = baseQty * price
-  const extraTotal = extraQty * extraPrice
-  const total = baseTotal + extraTotal
-
-  return { persons, baseQty, extraQty, baseTotal, extraTotal, total, included, extraPrice }
-}
-
+// '' → null, angka bulat → angka, selain itu → NaN
 function parseOptionalInt(value) {
   const trimmed = String(value ?? '').trim()
   if (trimmed === '') return null
@@ -74,705 +56,350 @@ function parseOptionalInt(value) {
   return Number.isInteger(num) ? num : NaN
 }
 
-function extractFieldErrors(err) {
-  const fieldErrors = {}
-  if (err?.code === 'DUPLICATE_VALUE') {
-    fieldErrors.queue_code = 'Kode antrean atau nama paket sudah digunakan.'
-    fieldErrors.name = 'Nama paket atau kode antrean sudah digunakan.'
-  }
-  if (err?.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-    for (const issue of err.details) {
-      const key = issue?.path?.[0]
-      if (key && !fieldErrors[key]) {
-        fieldErrors[key] = issue.message || 'Isian tidak valid.'
-      }
-    }
-  }
-  return fieldErrors
+function previewTotal(form, persons) {
+  const count = Math.max(1, Number(persons) || 1)
+  const price = Math.max(0, Number(form.price) || 0)
+  if (form.price_type === 'PER_ORANG') return count * price
+  if (form.price_type === 'PER_SESI') return price
+  const included = Math.max(1, Number(form.included_persons) || 1)
+  const extra = Math.max(0, Number(form.extra_person_price) || 0)
+  return price + Math.max(count - included, 0) * extra
 }
 
-// Formulir tambah/ubah paket beserta pengelolaan latar & tambahan per paket (SRS 5.4, Owner saja).
-export default function PackageForm({
-  selectedPackage = null,
-  backgrounds = [],
-  addons = [],
-  allowedAddonIds = [],
-  // notice = { scope: 'package' | 'addons', type: 'success' | 'error', text, requestId? }
-  // Disimpan di halaman induk supaya tidak hilang saat komponen ini dipasang ulang setelah simpan.
-  notice = null,
-  onNotice,
-  onSaved,
-  onCancelEdit,
-}) {
-  const isEditing = Boolean(selectedPackage?.id)
-  const [form, setForm] = useState(() => formFromPackage(selectedPackage))
-  const [previewPersons, setPreviewPersons] = useState(4)
+function priceLabel(type) {
+  if (type === 'PER_ORANG') return 'Harga per Orang (Rp) *'
+  if (type === 'PER_SESI') return 'Harga per Sesi (Rp) *'
+  return 'Harga Kelompok (Rp) *'
+}
+
+// Validasi info paket (sama dengan aturan backend) → { errors, payload }.
+function validatePackage(form) {
+  const errors = {}
+  const kelompok = form.price_type === 'PER_KELOMPOK'
+  const code = form.queue_code.trim().toUpperCase()
+  const price = parseOptionalInt(form.price)
+  const included = kelompok ? parseOptionalInt(form.included_persons) : null
+  const extra = kelompok ? parseOptionalInt(form.extra_person_price) : null
+  const min = parseOptionalInt(form.min_persons)
+  const max = parseOptionalInt(form.max_persons)
+  const duration = parseOptionalInt(form.duration_minutes)
+  const bad = (value, low, high) => value === null || Number.isNaN(value) || value < low || value > high
+
+  if (!form.name.trim()) errors.name = 'Isi nama paket.'
+  if (!/^[A-Z][A-Z0-9]{0,9}$/.test(code)) errors.queue_code = 'Huruf kapital/angka, diawali huruf (maks. 10).'
+  if (bad(price, 0, 1_000_000_000_000)) errors.price = 'Isi harga (angka bulat).'
+  if (kelompok && bad(included, 1, 1000)) errors.included_persons = 'Isi minimal 1.'
+  if (extra !== null && bad(extra, 0, 1_000_000_000_000)) errors.extra_person_price = 'Isi angka bulat.'
+  if (min !== null && bad(min, 1, 1000)) errors.min_persons = 'Minimal 1.'
+  if (max !== null && bad(max, 1, 1000)) errors.max_persons = 'Minimal 1.'
+  if (!errors.min_persons && !errors.max_persons && min !== null && max !== null && min > max) {
+    errors.max_persons = 'Tidak boleh di bawah minimal.'
+  }
+  if (bad(duration, 1, 600)) errors.duration_minutes = 'Isi 1–600 menit.'
+
+  if (Object.keys(errors).length) return { errors, payload: null }
+  return {
+    errors,
+    payload: {
+      name: form.name.trim(),
+      queue_code: code,
+      price_type: form.price_type,
+      price,
+      included_persons: kelompok ? included : null,
+      extra_person_price: kelompok ? (extra ?? 0) : null,
+      min_persons: min,
+      max_persons: max,
+      duration_minutes: duration,
+      description: form.description.trim() || null,
+    },
+  }
+}
+
+// Validasi baris latar → { errors: { [key]: { name?, max_persons? } }, list: [{ key, id, name, max_persons, is_active }] }
+function validateRows(rows) {
+  const errors = {}
+  const seen = new Set()
+  const list = rows.map((row) => {
+    const rowErrors = {}
+    const name = row.name.trim()
+    const max = parseOptionalInt(row.max_persons)
+    if (!name) rowErrors.name = 'Isi nama.'
+    else if (seen.has(name.toLowerCase())) rowErrors.name = 'Nama kembar.'
+    seen.add(name.toLowerCase())
+    if (max !== null && (Number.isNaN(max) || max < 1 || max > 1000)) rowErrors.max_persons = 'Minimal 1.'
+    if (Object.keys(rowErrors).length) errors[row.key] = rowErrors
+    return { key: row.key, id: row.id, name, max_persons: max, is_active: row.is_active }
+  })
+  return { errors, list }
+}
+
+function SectionTitle({ children, aside }) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h3 className="text-sm font-bold text-slate-800">{children}</h3>
+      {aside}
+    </div>
+  )
+}
+
+const ROW_INPUT = 'rounded-xl border bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand-500 focus:bg-white'
+
+// Pop-up tambah/ubah paket (Owner): info paket, pilihan latar, dan tambahan tersedia,
+// disimpan sekaligus dengan satu tombol Simpan (satu transaksi di backend).
+// pkg = null → paket baru. backgrounds = latar milik paket. addons = master tambahan.
+export default function PackageForm({ pkg = null, backgrounds = [], addons = [], allowedAddonIds = [], onClose, onSaved }) {
+  const isEditing = Boolean(pkg?.id)
+  const [form, setForm] = useState(() => formFromPackage(pkg))
+  const [rows, setRows] = useState(() => backgrounds.map(rowFromBackground))
+  const [checked, setChecked] = useState(() => new Set(allowedAddonIds))
+  const [previewPersons, setPreviewPersons] = useState('4')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [rowErrors, setRowErrors] = useState({})
   const [error, setError] = useState(null)
-  const [savingPackage, setSavingPackage] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  // State latar paket
-  const [bgForm, setBgForm] = useState({ name: '', max_persons: '' })
-  const [editingBgId, setEditingBgId] = useState(null)
-  const [editingBgForm, setEditingBgForm] = useState({ name: '', max_persons: '', is_active: true })
-  const [bgError, setBgError] = useState(null)
-  const [savingBg, setSavingBg] = useState(false)
-
-  // State tambahan layanan per paket
-  const [checkedAddonIds, setCheckedAddonIds] = useState(() => allowedAddonIds)
-  const [savingAddons, setSavingAddons] = useState(false)
+  const kelompok = form.price_type === 'PER_KELOMPOK'
+  // Tambahan yang sudah dihapus (arsip, is_active=0) tidak ditampilkan.
+  const addonOptions = addons.filter((addon) => Number(addon.is_active) === 1)
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setFieldErrors((prev) => ({ ...prev, [field]: null }))
-    if (notice) onNotice?.(null)
-  }
-
-  function validateForm() {
-    const nextErrors = {}
-    const name = form.name.trim()
-    const code = form.queue_code.trim().toUpperCase()
-    const price = parseOptionalInt(form.price)
-    const minPersons = parseOptionalInt(form.min_persons)
-    const maxPersons = parseOptionalInt(form.max_persons)
-    const includedPersons =
-      form.price_type === 'PER_KELOMPOK' ? parseOptionalInt(form.included_persons) : null
-    const extraPersonPrice =
-      form.price_type === 'PER_KELOMPOK' && String(form.extra_person_price).trim() !== ''
-        ? parseOptionalInt(form.extra_person_price)
-        : null
-
-    if (!name) nextErrors.name = 'Nama paket wajib diisi.'
-    if (!/^[A-Z][A-Z0-9]{0,9}$/.test(code)) {
-      nextErrors.queue_code = 'Kode diawali huruf kapital, hanya huruf kapital/angka (maks. 10 karakter).'
-    }
-    if (price === null || Number.isNaN(price) || price < 0) {
-      nextErrors.price = 'Harga wajib berupa angka bulat minimal 0.'
-    }
-    if (form.price_type === 'PER_KELOMPOK') {
-      if (includedPersons === null || Number.isNaN(includedPersons) || includedPersons < 1) {
-        nextErrors.included_persons = 'Jumlah orang tercakup wajib diisi (minimal 1).'
-      }
-      if (extraPersonPrice !== null && (Number.isNaN(extraPersonPrice) || extraPersonPrice < 0)) {
-        nextErrors.extra_person_price = 'Tarif tambahan per orang harus minimal 0.'
-      }
-    }
-    if (minPersons !== null && (Number.isNaN(minPersons) || minPersons < 1)) {
-      nextErrors.min_persons = 'Minimal orang harus minimal 1.'
-    }
-    if (maxPersons !== null && (Number.isNaN(maxPersons) || maxPersons < 1)) {
-      nextErrors.max_persons = 'Maksimal orang harus minimal 1.'
-    }
-    if (
-      minPersons !== null &&
-      maxPersons !== null &&
-      !Number.isNaN(minPersons) &&
-      !Number.isNaN(maxPersons) &&
-      minPersons > maxPersons
-    ) {
-      nextErrors.max_persons = 'Maksimal orang tidak boleh lebih kecil dari minimal orang.'
-    }
-
-    setFieldErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return null
-
-    return {
-      name,
-      queue_code: code,
-      price_type: form.price_type,
-      price,
-      included_persons: form.price_type === 'PER_KELOMPOK' ? includedPersons : null,
-      extra_person_price: form.price_type === 'PER_KELOMPOK' ? (extraPersonPrice ?? 0) : null,
-      min_persons: minPersons,
-      max_persons: maxPersons,
-      description: form.description.trim() || null,
-      is_active: Boolean(form.is_active),
-    }
-  }
-
-  async function handleSubmitPackage(event) {
-    event.preventDefault()
-    const payload = validateForm()
-    if (!payload) return
-
-    setSavingPackage(true)
     setError(null)
-    onNotice?.(null)
+  }
 
+  function updateRow(key, patch) {
+    setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    setRowErrors((prev) => ({ ...prev, [key]: null }))
+    setError(null)
+  }
+
+  function toggleAddon(addonId) {
+    setChecked((prev) => {
+      const next = new Set(prev)
+      if (next.has(addonId)) next.delete(addonId)
+      else next.add(addonId)
+      return next
+    })
+    setError(null)
+  }
+
+  async function save() {
+    const pkgCheck = validatePackage(form)
+    const rowCheck = validateRows(rows)
+    setFieldErrors(pkgCheck.errors)
+    setRowErrors(rowCheck.errors)
+    if (!pkgCheck.payload || Object.keys(rowCheck.errors).length) return
+
+    // Hanya latar baru dan latar lama yang berubah yang dikirim.
+    const original = new Map(backgrounds.map((bg) => [bg.id, bg]))
+    const sent = rowCheck.list.filter((row) => {
+      if (!row.id) return true
+      const old = original.get(row.id)
+      return old.name !== row.name || (old.max_persons ?? null) !== row.max_persons || Boolean(old.is_active) !== row.is_active
+    })
+    const body = {
+      package: { ...pkgCheck.payload, is_active: isEditing ? Boolean(pkg.is_active) : true },
+      backgrounds: sent.map(({ id, name, max_persons, is_active }) => ({ ...(id ? { id } : {}), name, max_persons, is_active })),
+      addon_ids: [...checked],
+    }
+
+    setSaving(true)
+    setError(null)
     try {
-      let saved
-      if (isEditing) {
-        saved = await updatePackage(selectedPackage.id, payload)
-        onNotice?.({ scope: 'package', type: 'success', text: `Paket "${saved.name}" berhasil diperbarui.` })
-      } else {
-        saved = await createPackage(payload)
-        setForm(EMPTY_FORM)
-        onNotice?.({
-          scope: 'package',
-          type: 'success',
-          text: `Paket "${saved.name}" (${saved.queue_code}) berhasil ditambahkan.`,
-        })
-      }
+      const saved = isEditing ? await updatePackageSetup(pkg.id, body) : await createPackageSetup(body)
       await onSaved?.(saved)
     } catch (err) {
-      setError(err)
-      const mapped = extractFieldErrors(err)
-      if (Object.keys(mapped).length > 0) {
-        setFieldErrors((prev) => ({ ...prev, ...mapped }))
+      // Tandai kolom yang ditolak backend; isian tidak dikosongkan.
+      const nextFields = {}
+      const nextRows = {}
+      for (const issue of err?.details ?? []) {
+        const [scope, indexOrField, field] = issue?.path ?? []
+        if (scope === 'package' && indexOrField) nextFields[indexOrField] = issue.message
+        if (scope === 'backgrounds' && sent[indexOrField] && field) {
+          nextRows[sent[indexOrField].key] = { ...nextRows[sent[indexOrField].key], [field]: issue.message }
+        }
       }
+      setFieldErrors(nextFields)
+      setRowErrors(nextRows)
+      setError(
+        err?.code === 'DUPLICATE_VALUE'
+          ? { message: 'Nama/kode paket atau nama latar sudah dipakai.' }
+          : { message: err?.message ?? 'Gagal menyimpan.', requestId: err?.status >= 500 ? err.requestId : null },
+      )
     } finally {
-      setSavingPackage(false)
+      setSaving(false)
     }
   }
-
-  async function handleAddBackground(event) {
-    event.preventDefault()
-    if (!isEditing) return
-    const name = bgForm.name.trim()
-    const maxPersons = parseOptionalInt(bgForm.max_persons)
-
-    if (!name) {
-      setBgError({ message: 'Nama latar wajib diisi.' })
-      return
-    }
-    if (maxPersons !== null && (Number.isNaN(maxPersons) || maxPersons < 1)) {
-      setBgError({ message: 'Batas maksimal orang latar harus berupa angka minimal 1.' })
-      return
-    }
-
-    setSavingBg(true)
-    setBgError(null)
-    try {
-      await createBackground(selectedPackage.id, {
-        name,
-        max_persons: maxPersons,
-        is_active: true,
-      })
-      setBgForm({ name: '', max_persons: '' })
-      await onSaved?.(selectedPackage)
-    } catch (err) {
-      setBgError(err)
-    } finally {
-      setSavingBg(false)
-    }
-  }
-
-  function startEditBackground(bg) {
-    setEditingBgId(bg.id)
-    setEditingBgForm({
-      name: bg.name ?? '',
-      max_persons: bg.max_persons != null ? String(bg.max_persons) : '',
-      is_active: Boolean(bg.is_active),
-    })
-    setBgError(null)
-  }
-
-  async function handleUpdateBackground(bgId) {
-    const name = editingBgForm.name.trim()
-    const maxPersons = parseOptionalInt(editingBgForm.max_persons)
-    if (!name) {
-      setBgError({ message: 'Nama latar wajib diisi.' })
-      return
-    }
-    if (maxPersons !== null && (Number.isNaN(maxPersons) || maxPersons < 1)) {
-      setBgError({ message: 'Batas maksimal orang latar harus minimal 1.' })
-      return
-    }
-
-    setSavingBg(true)
-    setBgError(null)
-    try {
-      await updateBackground(bgId, {
-        name,
-        max_persons: maxPersons,
-        is_active: Boolean(editingBgForm.is_active),
-      })
-      setEditingBgId(null)
-      await onSaved?.(selectedPackage)
-    } catch (err) {
-      setBgError(err)
-    } finally {
-      setSavingBg(false)
-    }
-  }
-
-  async function handleToggleBackgroundActive(bg) {
-    setSavingBg(true)
-    setBgError(null)
-    try {
-      await updateBackground(bg.id, {
-        name: bg.name,
-        max_persons: bg.max_persons ?? null,
-        is_active: !bg.is_active,
-      })
-      await onSaved?.(selectedPackage)
-    } catch (err) {
-      setBgError(err)
-    } finally {
-      setSavingBg(false)
-    }
-  }
-
-  function toggleAddonSelection(addonId) {
-    if (notice) onNotice?.(null)
-    setCheckedAddonIds((prev) =>
-      prev.includes(addonId) ? prev.filter((id) => id !== addonId) : [...prev, addonId],
-    )
-  }
-
-  async function handleSavePackageAddons() {
-    if (!isEditing) return
-    setSavingAddons(true)
-    onNotice?.(null)
-    try {
-      await setPackageAddons(selectedPackage.id, checkedAddonIds)
-      onNotice?.({ scope: 'addons', type: 'success', text: 'Daftar tambahan layanan paket berhasil disimpan.' })
-      await onSaved?.(selectedPackage)
-    } catch (err) {
-      onNotice?.({ scope: 'addons', type: 'error', text: err.message, requestId: err.requestId })
-    } finally {
-      setSavingAddons(false)
-    }
-  }
-
-  const preview = calculatePreview(form, previewPersons)
 
   return (
-    <div className="space-y-6">
-      <Card
-        title={
-          isEditing
-            ? `Ubah Paket: ${selectedPackage.name} (${selectedPackage.queue_code})`
-            : 'Pengaturan Skema Harga & Kapasitas Paket Baru'
-        }
-        description={
-          isEditing
-            ? 'Perubahan harga dan kapasitas berlaku untuk pendaftaran baru dan tidak mengubah transaksi yang sudah tercatat.'
-            : 'Tambahkan paket studio baru beserta skema perhitungan harga dan kapasitas ruangan.'
-        }
-        actions={
-          isEditing && (
-            <Button variant="neutral" size="sm" onClick={onCancelEdit}>
-              + Mode Tambah Paket Baru
-            </Button>
-          )
-        }
-      >
-        <form onSubmit={handleSubmitPackage} className="space-y-5">
-          {error && (
-            <Alert variant="error" requestId={error.status >= 500 ? error.requestId : null}>
-              {error.message}
-            </Alert>
-          )}
-          {notice?.scope === 'package' && <Alert variant="success">{notice.text}</Alert>}
+    <Modal
+      open
+      size="xl"
+      title={isEditing ? `Ubah ${pkg.name}` : 'Paket Baru'}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="neutral" onClick={onClose} disabled={saving}>
+            <X aria-hidden="true" className="h-4 w-4" /> Batal
+          </Button>
+          <Button variant="primary" loading={saving} onClick={save}>
+            {!saving && <Check aria-hidden="true" className="h-4 w-4" />} Simpan
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {error && (
+          <Alert variant="error" requestId={error.requestId}>
+            {error.message}
+          </Alert>
+        )}
 
+        <section>
+          <SectionTitle>Info Paket</SectionTitle>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Input
-              label="Nama Paket *"
-              placeholder="Mis. Reguler Studio"
-              value={form.name}
-              onChange={(event) => updateField('name', event.target.value)}
-              error={fieldErrors.name}
-              maxLength={100}
-              required
-            />
-            <Input
-              label="Kode Antrean *"
-              placeholder="Mis. RG"
-              value={form.queue_code}
-              onChange={(event) => updateField('queue_code', event.target.value.toUpperCase())}
-              error={fieldErrors.queue_code}
-              hint="Huruf kapital/angka, diawali huruf (maks. 10)"
-              maxLength={10}
-              required
-            />
-            <Select
-              label="Skema Hitung Harga *"
-              options={PRICE_TYPE_OPTIONS}
-              value={form.price_type}
-              onChange={(event) => updateField('price_type', event.target.value)}
-              error={fieldErrors.price_type}
-            />
-            <Select
-              label="Status Paket"
-              options={[
-                { value: 'true', label: 'Aktif (Tampil di Pendaftaran)' },
-                { value: 'false', label: 'Nonaktif (Disembunyikan)' },
-              ]}
-              value={String(form.is_active)}
-              onChange={(event) => updateField('is_active', event.target.value === 'true')}
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Input
-              label={
-                form.price_type === 'PER_ORANG'
-                  ? 'Harga per Orang (Rp) *'
-                  : form.price_type === 'PER_SESI'
-                    ? 'Harga Tetap per Sesi (Rp) *'
-                    : 'Harga Paket Dasar (Rp) *'
-              }
-              type="number"
-              min="0"
-              step="1"
-              placeholder="110000"
-              value={form.price}
-              onChange={(event) => updateField('price', event.target.value)}
-              error={fieldErrors.price}
-              required
-            />
-
-            {form.price_type === 'PER_KELOMPOK' && (
+            <Input label="Nama Paket *" placeholder="Mis. Reguler Studio" maxLength={100} value={form.name} onChange={(e) => updateField('name', e.target.value)} error={fieldErrors.name} />
+            <Input label="Kode Antrean *" placeholder="Mis. RG" maxLength={10} value={form.queue_code} onChange={(e) => updateField('queue_code', e.target.value.toUpperCase())} error={fieldErrors.queue_code} />
+            <Select label="Skema Harga *" options={PRICE_TYPE_OPTIONS} value={form.price_type} onChange={(e) => updateField('price_type', e.target.value)} />
+            <Input label={priceLabel(form.price_type)} type="number" min="0" step="1" placeholder="Mis. 110000" value={form.price} onChange={(e) => updateField('price', e.target.value)} error={fieldErrors.price} hint={Number(form.price) > 0 ? formatRupiah(form.price) : undefined} />
+            {kelompok && (
               <>
-                <Input
-                  label="Kuota Orang Dasar *"
-                  type="number"
-                  min="1"
-                  max="1000"
-                  placeholder="2"
-                  value={form.included_persons}
-                  onChange={(event) => updateField('included_persons', event.target.value)}
-                  error={fieldErrors.included_persons}
-                  hint="Jumlah orang yang tercakup harga dasar"
-                  required
-                />
-                <Input
-                  label="Tarif Tambah per Orang (Rp)"
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="30000"
-                  value={form.extra_person_price}
-                  onChange={(event) => updateField('extra_person_price', event.target.value)}
-                  error={fieldErrors.extra_person_price}
-                  hint="Biaya per orang di atas kuota dasar"
-                />
+                <Input label="Termasuk Harga (orang) *" type="number" min="1" step="1" placeholder="Mis. 2" value={form.included_persons} onChange={(e) => updateField('included_persons', e.target.value)} error={fieldErrors.included_persons} />
+                <Input label="Tambahan per Orang (Rp)" type="number" min="0" step="1" placeholder="Mis. 30000" value={form.extra_person_price} onChange={(e) => updateField('extra_person_price', e.target.value)} error={fieldErrors.extra_person_price} />
               </>
             )}
-
-            <Input
-              label="Minimal Orang (Opsional)"
+            <Input label="Min. Orang" type="number" min="1" step="1" placeholder="Bebas" value={form.min_persons} onChange={(e) => updateField('min_persons', e.target.value)} error={fieldErrors.min_persons} />
+            <Input label="Maks. Orang" type="number" min="1" step="1" placeholder="Bebas" value={form.max_persons} onChange={(e) => updateField('max_persons', e.target.value)} error={fieldErrors.max_persons} />
+            <Input label="Durasi Sesi (menit) *" type="number" min="1" max="600" step="1" placeholder="Mis. 15" value={form.duration_minutes} onChange={(e) => updateField('duration_minutes', e.target.value)} error={fieldErrors.duration_minutes} />
+            <Input className="sm:col-span-2 lg:col-span-3" label="Keterangan" placeholder="Mis. cetak 4R per orang · seluruh softcopy" maxLength={5000} value={form.description} onChange={(e) => updateField('description', e.target.value)} error={fieldErrors.description} />
+          </div>
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            Contoh
+            <input
               type="number"
+              {...numberGuard()}
               min="1"
-              max="1000"
-              placeholder="Kosongkan jika bebas"
-              value={form.min_persons}
-              onChange={(event) => updateField('min_persons', event.target.value)}
-              error={fieldErrors.min_persons}
+              aria-label="Jumlah orang contoh"
+              value={previewPersons}
+              onChange={(e) => setPreviewPersons(e.target.value)}
+              className={`${ROW_INPUT} w-16 border-slate-200 py-1 text-center`}
             />
-            <Input
-              label="Maksimal Orang (Opsional)"
-              type="number"
-              min="1"
-              max="1000"
-              placeholder="Mis. 15"
-              value={form.max_persons}
-              onChange={(event) => updateField('max_persons', event.target.value)}
-              error={fieldErrors.max_persons}
-            />
-          </div>
+            orang = <strong className="text-brand-600">{formatRupiah(previewTotal(form, previewPersons))}</strong>
+          </p>
+        </section>
 
-          <Input
-            label="Keterangan Durasi & Fasilitas"
-            placeholder="Mis. 15 menit · cetak 4R per orang · seluruh softcopy"
-            value={form.description}
-            onChange={(event) => updateField('description', event.target.value)}
-            error={fieldErrors.description}
-            maxLength={5000}
-          />
-
-          {/* Kotak Pratinjau Harga (Wajib SRS / README) */}
-          <div className="rounded-2xl border border-brand-200 bg-brand-50/70 p-4">
-            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-brand-700 uppercase">
-                  <Sparkles aria-hidden="true" className="h-4 w-4" />
-                  Pratinjau Perhitungan Harga Sebelum Disimpan
-                </div>
-                <p className="text-xs text-slate-600">
-                  {form.price_type === 'PER_SESI' &&
-                    `Harga tetap ${formatRupiah(form.price)} per sesi tanpa biaya tambahan orang.`}
-                  {form.price_type === 'PER_ORANG' &&
-                    `${preview.persons} orang × ${formatRupiah(form.price)}/orang = ${formatRupiah(preview.total)}.`}
-                  {form.price_type === 'PER_KELOMPOK' &&
-                    `Harga dasar ${formatRupiah(form.price)} (${preview.included ?? 0} org pertama)` +
-                      (preview.extraQty > 0
-                        ? ` + ${preview.extraQty} org tambahan × ${formatRupiah(preview.extraPrice)}`
-                        : ' (tanpa tambahan orang)')}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium text-slate-600">Simulasi orang:</span>
-                  {[1, 2, 4, 6].map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setPreviewPersons(num)}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                        Number(previewPersons) === num
-                          ? 'bg-brand-600 text-white'
-                          : 'bg-white text-slate-600 hover:bg-brand-100'
-                      }`}
-                    >
-                      {num} org
-                    </button>
-                  ))}
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    aria-label="Jumlah orang simulasi"
-                    value={previewPersons}
-                    onChange={(event) => setPreviewPersons(event.target.value)}
-                    className="w-16 rounded-lg border border-brand-200 bg-white px-2 py-1 text-center text-xs font-semibold text-slate-800"
-                  />
-                </div>
-
-                <div className="rounded-xl bg-white px-4 py-2 text-right shadow-xs">
-                  <span className="block text-[11px] text-slate-500">
-                    Estimasi ({preview.persons} orang)
-                  </span>
-                  <span className="text-lg font-bold text-brand-600">
-                    {formatRupiah(preview.total)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap justify-end gap-3 pt-1">
-            {isEditing && (
-              <Button variant="neutral" onClick={onCancelEdit} disabled={savingPackage}>
-                Batal Ubah
-              </Button>
-            )}
-            <Button type="submit" variant="primary" loading={savingPackage}>
-              {isEditing ? 'Simpan Perubahan Paket' : 'Simpan Paket Baru'}
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      {/* Pengelolaan Latar & Tambahan untuk Paket yang Sedang Dipilih */}
-      {isEditing && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card
-            title={`Pilihan Latar — ${selectedPackage.name}`}
-            description="Latar tidak dapat dihapus; nonaktifkan latar jika sedang tidak tersedia."
-          >
-            <div className="space-y-4">
-              {bgError && (
-                <Alert variant="error" requestId={bgError.status >= 500 ? bgError.requestId : null}>
-                  {bgError.message}
-                </Alert>
-              )}
-
-              <form onSubmit={handleAddBackground} className="grid gap-3 sm:grid-cols-12">
-                <div className="sm:col-span-6">
-                  <Input
-                    label="Nama Latar Baru"
-                    placeholder="Mis. Putih, Abu-abu, Spotlight"
-                    value={bgForm.name}
-                    onChange={(event) => setBgForm((prev) => ({ ...prev, name: event.target.value }))}
-                    maxLength={100}
-                  />
+          <section>
+            <SectionTitle
+              aside={
+                <Button size="sm" variant="soft" onClick={() => setRows((prev) => [...prev, newRow()])}>
+                  <Plus aria-hidden="true" className="h-3.5 w-3.5" /> Latar
+                </Button>
+              }
+            >
+              Pilihan Latar
+            </SectionTitle>
+            {rows.length === 0 ? (
+              <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-400">Tanpa latar.</p>
+            ) : (
+              <>
+                <div className="mb-1.5 flex items-center gap-2 text-xs text-slate-500" aria-hidden="true">
+                  <span className="min-w-0 flex-1">Nama Latar</span>
+                  <span className="w-32">Maks. Orang</span>
+                  <span className="w-10 text-center">Aktif</span>
+                  <span className="w-6" />
                 </div>
-                <div className="sm:col-span-4">
-                  <Input
-                    label="Maks. Orang"
-                    type="number"
-                    min="1"
-                    max="1000"
-                    placeholder="Opsional"
-                    value={bgForm.max_persons}
-                    onChange={(event) =>
-                      setBgForm((prev) => ({ ...prev, max_persons: event.target.value }))
-                    }
-                  />
-                </div>
-                <div className="flex items-end sm:col-span-2">
-                  <Button
-                    type="submit"
-                    variant="success"
-                    size="md"
-                    loading={savingBg}
-                    className="w-full"
-                  >
-                    <Plus aria-hidden="true" className="h-4 w-4" />
-                    Tambah
-                  </Button>
-                </div>
-              </form>
-
-              <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80">
-                {backgrounds.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-slate-400">
-                    Belum ada latar khusus untuk paket ini.
-                  </p>
-                ) : (
-                  backgrounds.map((bg) => {
-                    const isEditingRow = editingBgId === bg.id
+                <ul className="space-y-2">
+                  {rows.map((row) => {
+                    const errs = rowErrors[row.key] ?? {}
                     return (
-                      <div
-                        key={bg.id}
-                        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
-                      >
-                        {isEditingRow ? (
-                          <div className="flex flex-1 flex-wrap items-center gap-2">
+                      <li key={row.key}>
+                        <div className="flex items-center gap-2">
+                          <input
+                            aria-label="Nama latar"
+                            placeholder="Nama latar"
+                            maxLength={100}
+                            value={row.name}
+                            onChange={(e) => updateRow(row.key, { name: e.target.value })}
+                            className={`${ROW_INPUT} min-w-0 flex-1 ${errs.name ? 'border-red-300' : 'border-slate-200'} ${row.is_active ? '' : 'text-slate-400'}`}
+                          />
+                          <div className="relative w-32 shrink-0">
                             <input
-                              type="text"
-                              value={editingBgForm.name}
-                              onChange={(event) =>
-                                setEditingBgForm((prev) => ({ ...prev, name: event.target.value }))
-                              }
-                              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-800"
-                              placeholder="Nama latar"
-                            />
-                            <input
+                              aria-label="Maks. orang latar"
                               type="number"
+                              {...numberGuard()}
                               min="1"
-                              max="1000"
-                              value={editingBgForm.max_persons}
-                              onChange={(event) =>
-                                setEditingBgForm((prev) => ({
-                                  ...prev,
-                                  max_persons: event.target.value,
-                                }))
-                              }
-                              className="w-28 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800"
-                              placeholder="Maks org"
+                              placeholder="Ikut paket"
+                              value={row.max_persons}
+                              onChange={(e) => updateRow(row.key, { max_persons: e.target.value })}
+                              className={`${ROW_INPUT} w-full ${row.max_persons !== '' ? 'pr-14' : ''} ${errs.max_persons ? 'border-red-300' : 'border-slate-200'}`}
                             />
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              loading={savingBg}
-                              onClick={() => handleUpdateBackground(bg.id)}
-                            >
-                              Simpan
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="neutral"
-                              onClick={() => setEditingBgId(null)}
-                              disabled={savingBg}
-                            >
-                              Batal
-                            </Button>
+                            {row.max_persons !== '' && (
+                              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-slate-400">orang</span>
+                            )}
                           </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-2.5">
-                              <Layers aria-hidden="true" className="h-4 w-4 text-brand-600" />
-                              <div>
-                                <span className="font-semibold text-slate-800">{bg.name}</span>
-                                <span className="ml-2 text-xs text-slate-500">
-                                  {bg.max_persons ? `(Maks. ${bg.max_persons} orang)` : '(Sesuai kapasitas paket)'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge tone={bg.is_active ? 'green' : 'gray'}>
-                                {bg.is_active ? 'Aktif' : 'Nonaktif'}
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant="soft"
-                                onClick={() => startEditBackground(bg)}
-                                disabled={savingBg}
-                              >
-                                Ubah
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={bg.is_active ? 'danger' : 'soft-success'}
-                                onClick={() => handleToggleBackgroundActive(bg)}
-                                disabled={savingBg}
-                              >
-                                {bg.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                              </Button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-          </Card>
-
-          <Card
-            title={`Tambahan Layanan Tersedia — ${selectedPackage.name}`}
-            description="Centang tambahan layanan yang boleh dipilih pelanggan pada paket ini."
-          >
-            <div className="space-y-4">
-              {notice?.scope === 'addons' && (
-                <Alert
-                  variant={notice.type === 'error' ? 'error' : 'success'}
-                  requestId={notice.type === 'error' ? notice.requestId : null}
-                >
-                  {notice.text}
-                </Alert>
-              )}
-
-              {addons.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-400">
-                  Belum ada master tambahan layanan. Buat tambahan layanan di bagian bawah halaman.
-                </p>
-              ) : (
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  {addons.map((addon) => {
-                    const checked = checkedAddonIds.includes(addon.id)
-                    return (
-                      <label
-                        key={addon.id}
-                        className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 text-sm transition ${
-                          checked
-                            ? 'border-brand-500 bg-brand-50/70'
-                            : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100/70'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleAddonSelection(addon.id)}
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate font-semibold text-slate-800">
-                              {addon.name}
-                            </span>
-                            {!addon.is_active && <Badge tone="gray">Nonaktif</Badge>}
-                          </div>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {formatRupiah(addon.price)} / {addon.unit}
-                          </p>
+                          <label className="flex w-10 shrink-0 cursor-pointer justify-center">
+                            <input
+                              type="checkbox"
+                              aria-label="Latar aktif"
+                              checked={row.is_active}
+                              onChange={(e) => updateRow(row.key, { is_active: e.target.checked })}
+                              className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                            />
+                          </label>
+                          {row.id ? (
+                            <span className="w-6 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <button
+                              type="button"
+                              aria-label="Hapus baris latar"
+                              onClick={() => setRows((prev) => prev.filter((item) => item.key !== row.key))}
+                              className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                            >
+                              <X aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
-                      </label>
+                        {(errs.name || errs.max_persons) && <p className="mt-1 text-xs text-red-600">{errs.name ?? errs.max_persons}</p>}
+                      </li>
                     )
                   })}
-                </div>
-              )}
+                </ul>
+              </>
+            )}
+          </section>
 
-              <div className="flex justify-end">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={savingAddons}
-                  onClick={handleSavePackageAddons}
-                >
-                  <Check aria-hidden="true" className="h-4 w-4" />
-                  Simpan Tambahan Paket Ini
-                </Button>
+          <section>
+            <SectionTitle>Tambahan Tersedia</SectionTitle>
+            {addonOptions.length === 0 ? (
+              <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-400">Belum ada tambahan.</p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {addonOptions.map((addon) => {
+                  const on = checked.has(addon.id)
+                  return (
+                    <label
+                      key={addon.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm transition ${
+                        on ? 'border-brand-500 bg-brand-50/70' : 'border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input type="checkbox" checked={on} onChange={() => toggleAddon(addon.id)} className="h-4 w-4 rounded border-slate-300 text-brand-600" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-slate-800">{addon.name}</span>
+                        <span className="block text-xs text-slate-500">
+                          {formatRupiah(addon.price)}/{addon.unit}
+                        </span>
+                      </span>
+                    </label>
+                  )
+                })}
               </div>
-            </div>
-          </Card>
+            )}
+          </section>
         </div>
-      )}
-    </div>
+      </div>
+    </Modal>
   )
 }

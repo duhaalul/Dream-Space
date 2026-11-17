@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DoorClosed, DoorOpen, Layers, Plus, Sparkles, Users } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DoorClosed, DoorOpen, Eye, EyeOff, Layers, LayoutGrid, Pencil, Plus, Sparkles, Timer, Users } from 'lucide-react'
 import { useAuth } from '@/modules/akun/useAuth'
 import {
   Alert,
@@ -16,9 +16,9 @@ import AddonManager from '../components/AddonManager'
 import PackageForm from '../components/PackageForm'
 
 const FILTER_OPTIONS = [
-  { value: 'all', label: 'Semua Paket' },
-  { value: 'active', label: 'Aktif' },
-  { value: 'inactive', label: 'Nonaktif' },
+  { value: 'all', label: 'Semua Paket', icon: LayoutGrid },
+  { value: 'active', label: 'Aktif', icon: Eye },
+  { value: 'inactive', label: 'Nonaktif', icon: EyeOff },
 ]
 
 function formatCapacity(pkg) {
@@ -44,21 +44,18 @@ function formatPriceNote(pkg) {
 export default function PackagesPage() {
   const { user } = useAuth()
   const isOwner = user.role === ROLES.OWNER
-  const formRef = useRef(null)
 
   const [packages, setPackages] = useState([])
   const [backgrounds, setBackgrounds] = useState([])
   const [allowedAddons, setAllowedAddons] = useState([])
   const [addons, setAddons] = useState([])
   const [filter, setFilter] = useState('all')
-  const [selectedPackageId, setSelectedPackageId] = useState(null)
+  // Pop-up Kelola Paket: null = tertutup, 'new' = paket baru, angka = id paket yang diubah.
+  const [editing, setEditing] = useState(null)
+  const [savedNotice, setSavedNotice] = useState(null)
   const [loading, setLoading] = useState(true)
   const [togglingId, setTogglingId] = useState(null)
   const [error, setError] = useState(null)
-  // Pesan sukses/gagal form paket disimpan di sini (bukan di PackageForm), karena PackageForm
-  // dipasang ulang setelah data dimuat ulang sehingga state di dalamnya ikut hilang.
-  const [formNotice, setFormNotice] = useState(null)
-
   const loadData = useCallback(async () => {
     try {
       const [pkgRes, addonList] = await Promise.all([getPackages(), getAddons()])
@@ -103,20 +100,22 @@ export default function PackagesPage() {
     })
   }, [packages, filter])
 
-  const selectedPackage = useMemo(
-    () => packages.find((pkg) => pkg.id === selectedPackageId) ?? null,
-    [packages, selectedPackageId],
-  )
+  const editingPackage = typeof editing === 'number' ? packages.find((pkg) => pkg.id === editing) ?? null : null
+  const editingAddonIds = editingPackage
+    ? allowedAddons.filter((item) => item.package_id === editingPackage.id).map((item) => item.addon_id)
+    : []
 
-  const selectedAllowedAddonIds = useMemo(
-    () =>
-      selectedPackage
-        ? allowedAddons
-            .filter((item) => item.package_id === selectedPackage.id)
-            .map((item) => item.addon_id)
-        : [],
-    [selectedPackage, allowedAddons],
-  )
+  // Tambahan yang masih tercentang di paket: { [addonId]: [nama paket] } (tidak bisa dihapus).
+  const addonUsage = useMemo(() => {
+    const names = new Map(packages.map((pkg) => [pkg.id, pkg.name]))
+    const usage = {}
+    for (const link of allowedAddons) {
+      if (!names.has(link.package_id)) continue
+      if (!usage[link.addon_id]) usage[link.addon_id] = []
+      usage[link.addon_id].push(names.get(link.package_id))
+    }
+    return usage
+  }, [packages, allowedAddons])
 
   const addonMap = useMemo(() => {
     const map = new Map()
@@ -124,16 +123,9 @@ export default function PackagesPage() {
     return map
   }, [addons])
 
-  function handleSelectForEdit(pkg) {
-    setSelectedPackageId(pkg.id)
-    setFormNotice(null)
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  function handleStartCreate() {
-    setSelectedPackageId(null)
-    setFormNotice(null)
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  function openEditor(target) {
+    setSavedNotice(null)
+    setEditing(target)
   }
 
   async function handleTogglePackageActive(pkg) {
@@ -155,6 +147,7 @@ export default function PackagesPage() {
             : null,
         min_persons: pkg.min_persons != null ? Number(pkg.min_persons) : null,
         max_persons: pkg.max_persons != null ? Number(pkg.max_persons) : null,
+        duration_minutes: pkg.duration_minutes != null ? Number(pkg.duration_minutes) : null,
         description: pkg.description ?? null,
         is_active: !pkg.is_active,
       })
@@ -171,11 +164,6 @@ export default function PackagesPage() {
       <PageHeader
         title={isOwner ? 'Kelola Paket' : 'Paket'}
         code="T-07"
-        description={
-          isOwner
-            ? 'Kelola paket studio, skema harga, kapasitas, pilihan latar, dan tambahan layanan.'
-            : 'Daftar paket studio, skema harga, kapasitas, latar, serta status ketersediaan ruangan.'
-        }
         actions={
           <div className="flex flex-wrap items-center gap-2.5">
             <SegmentedControl
@@ -185,7 +173,7 @@ export default function PackagesPage() {
               onChange={setFilter}
             />
             {isOwner && (
-              <Button variant="primary" onClick={handleStartCreate}>
+              <Button variant="primary" onClick={() => openEditor('new')}>
                 <Plus aria-hidden="true" className="h-4 w-4" />
                 Paket Baru
               </Button>
@@ -200,6 +188,7 @@ export default function PackagesPage() {
             {error.message}
           </Alert>
         )}
+        {savedNotice && <Alert variant="success">{savedNotice}</Alert>}
 
         {/* Daftar Kartu Paket sesuai Desain Figma */}
         {loading ? (
@@ -225,7 +214,6 @@ export default function PackagesPage() {
                 .filter((item) => item.package_id === pkg.id)
                 .map((item) => item.addon_id)
               const pkgAddons = pkgAddonIds.map((id) => addonMap.get(id)).filter(Boolean)
-              const isSelected = selectedPackageId === pkg.id
               const isOpen = Boolean(pkg.is_open)
               const isActive = Boolean(pkg.is_active)
 
@@ -233,11 +221,7 @@ export default function PackagesPage() {
                 <article
                   key={pkg.id}
                   className={`flex flex-col justify-between overflow-hidden rounded-3xl border bg-white shadow-xs transition ${
-                    isSelected
-                      ? 'border-brand-500 ring-2 ring-brand-500/25'
-                      : isActive
-                        ? 'border-slate-200/90'
-                        : 'border-slate-200 bg-slate-50/60 opacity-85'
+                    isActive ? 'border-slate-200/90' : 'border-slate-200 bg-slate-50/60 opacity-85'
                   }`}
                 >
                   <div>
@@ -324,6 +308,16 @@ export default function PackagesPage() {
                           </span>
                         </div>
 
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-slate-500">
+                            <Timer aria-hidden="true" className="h-3.5 w-3.5 text-brand-600" />
+                            Durasi:
+                          </span>
+                          <span className="font-semibold text-slate-800">
+                            {pkg.duration_minutes ? `${pkg.duration_minutes} menit` : 'Belum diisi'}
+                          </span>
+                        </div>
+
                         <div>
                           <span className="inline-flex items-center gap-1.5 text-slate-500">
                             <Layers aria-hidden="true" className="h-3.5 w-3.5 text-brand-600" />
@@ -377,13 +371,8 @@ export default function PackagesPage() {
                   {/* Tombol Aksi Khusus Owner (Admin Hanya Melihat) */}
                   {isOwner && (
                     <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50/50 px-5 py-3.5">
-                      <Button
-                        size="sm"
-                        variant={isSelected ? 'primary' : 'soft'}
-                        className="flex-1"
-                        onClick={() => handleSelectForEdit(pkg)}
-                      >
-                        {isSelected ? 'Sedang Diubah' : 'Ubah & Latar'}
+                      <Button size="sm" variant="soft" className="flex-1" onClick={() => openEditor(pkg.id)}>
+                        <Pencil aria-hidden="true" className="h-3.5 w-3.5" /> Ubah
                       </Button>
                       <Button
                         size="sm"
@@ -391,6 +380,8 @@ export default function PackagesPage() {
                         loading={togglingId === pkg.id}
                         onClick={() => handleTogglePackageActive(pkg)}
                       >
+                        {togglingId !== pkg.id &&
+                          (isActive ? <EyeOff aria-hidden="true" className="h-3.5 w-3.5" /> : <Eye aria-hidden="true" className="h-3.5 w-3.5" />)}
                         {isActive ? 'Nonaktifkan' : 'Aktifkan'}
                       </Button>
                     </div>
@@ -404,37 +395,24 @@ export default function PackagesPage() {
         {/* Bagian Pengelolaan Khusus Owner */}
         {isOwner && (
           <>
-            <div ref={formRef} className="scroll-mt-6">
+            {editing !== null && (editing === 'new' || editingPackage) && (
               <PackageForm
-                key={`${selectedPackage?.id ?? 'new'}-${selectedPackage?.updated_at ?? ''}-${selectedAllowedAddonIds.join(',')}`}
-                selectedPackage={selectedPackage}
-                backgrounds={
-                  selectedPackage
-                    ? backgrounds.filter((bg) => bg.package_id === selectedPackage.id)
-                    : []
-                }
+                key={editing}
+                pkg={editingPackage}
+                backgrounds={editingPackage ? backgrounds.filter((bg) => bg.package_id === editingPackage.id) : []}
                 addons={addons}
-                allowedAddonIds={selectedAllowedAddonIds}
-                notice={formNotice}
-                onNotice={setFormNotice}
-                onSaved={async (savedPkg) => {
+                allowedAddonIds={editingAddonIds}
+                onClose={() => setEditing(null)}
+                onSaved={async (saved) => {
+                  setEditing(null)
+                  setSavedNotice(`Paket "${saved.name}" disimpan.`)
                   await loadData()
-                  if (savedPkg?.id && !selectedPackageId) {
-                    setSelectedPackageId(savedPkg.id)
-                  }
-                }}
-                onCancelEdit={() => {
-                  setSelectedPackageId(null)
-                  setFormNotice(null)
                 }}
               />
-            </div>
+            )}
 
-            <Card
-              title="Kelola Master Tambahan Layanan"
-              description="Daftar layanan tambahan seperti tambah durasi foto atau cetak lembar tambahan. Tambahan yang dibuat di sini dapat dicentang pada masing-masing paket."
-            >
-              <AddonManager addons={addons} onChanged={loadData} />
+            <Card title="Tambahan Layanan">
+              <AddonManager addons={addons} usage={addonUsage} onChanged={loadData} />
             </Card>
           </>
         )}

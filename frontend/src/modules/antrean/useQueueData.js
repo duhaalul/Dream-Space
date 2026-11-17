@@ -7,10 +7,8 @@ import { getQueueRooms, getVisit, getVisits } from './api'
 const REFRESH_MS = 15_000
 const PAGE_SIZE = 100 // batas backend per halaman GET /visits
 
-const PREVIOUS_DAYS = 60 // rentang pencarian kunjungan hari sebelumnya yang belum ditutup
-
 // params: { date } atau { from, to }. Hanya kunjungan aktif (bukan Selesai/Dibatalkan).
-async function fetchActiveVisits(params) {
+export async function fetchActiveVisits(params) {
   const visits = []
   for (let page = 1; page <= 20; page += 1) {
     const rows = await getVisits({ ...params, page })
@@ -18,12 +16,6 @@ async function fetchActiveVisits(params) {
     if (rows.length < PAGE_SIZE) break
   }
   return visits
-}
-
-// "2026-11-15" + (-1) → "2026-11-14" (kalender WIB)
-function shiftDate(date, days) {
-  const noon = new Date(`${date}T12:00:00+07:00`).getTime()
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date(noon + days * 86_400_000))
 }
 
 // Bentuk baris detail (GET /visits/:id) disamakan dengan baris daftar GET /visits.
@@ -38,35 +30,25 @@ function rowFromDetail(detail) {
   }
 }
 
-async function fetchQueue(includePrevious) {
+async function fetchQueue() {
   const today = todayWib()
-  const [catalog, rooms, visits, previous] = await Promise.all([
-    getPackages(),
-    getQueueRooms(),
-    fetchActiveVisits({ date: today }),
-    includePrevious ? fetchActiveVisits({ from: shiftDate(today, -PREVIOUS_DAYS), to: shiftDate(today, -1) }) : [],
-  ])
-  // Pelanggan yang dipanggil/sedang foto sejak hari sebelumnya tidak ada di daftar hari ini.
+  const [catalog, rooms, visits] = await Promise.all([getPackages(), getQueueRooms(), fetchActiveVisits({ date: today })])
+  // Pelanggan yang dipanggil/sedang foto sejak hari sebelumnya tidak ada di daftar hari ini
+  // (backend menutupnya otomatis saat ganti hari; ini hanya jaga-jaga sebelum proses itu berjalan).
   const known = new Set(visits.map((visit) => visit.id))
-  const previousById = new Map(previous.map((visit) => [visit.id, visit]))
   const carried = rooms.filter((room) => room.active_visit_id && !known.has(room.active_visit_id))
-  const extra = await Promise.all(
-    carried.map((room) => previousById.get(room.active_visit_id) ?? getVisit(room.active_visit_id).then(rowFromDetail)),
-  )
+  const extra = await Promise.all(carried.map((room) => getVisit(room.active_visit_id).then(rowFromDetail)))
   return {
     today,
     packages: catalog?.packages ?? [],
     backgrounds: catalog?.backgrounds ?? [],
     visits: [...visits, ...extra],
-    // Kunjungan aktif dari hari sebelumnya (hanya bila includePrevious) — untuk peringatan di Ringkasan.
-    previous,
     loadedAt: new Date(),
   }
 }
 
 // → { data, error, reload }. data null selama pemuatan pertama.
-// includePrevious: ikut memuat kunjungan aktif dari hari sebelumnya (Ringkasan).
-export function useQueueData({ includePrevious = false } = {}) {
+export function useQueueData() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const latest = useRef(0)
@@ -74,7 +56,7 @@ export function useQueueData({ includePrevious = false } = {}) {
   const reload = useCallback(() => {
     // Hanya hasil permintaan terakhir yang dipakai (hindari data lama menimpa data baru).
     const ticket = ++latest.current
-    return fetchQueue(includePrevious)
+    return fetchQueue()
       .then((next) => {
         if (ticket !== latest.current) return
         setData(next)
@@ -83,7 +65,7 @@ export function useQueueData({ includePrevious = false } = {}) {
       .catch((err) => {
         if (ticket === latest.current) setError(err)
       })
-  }, [includePrevious])
+  }, [])
 
   useEffect(() => {
     reload()
@@ -94,4 +76,69 @@ export function useQueueData({ includePrevious = false } = {}) {
   }, [reload])
 
   return { data, error, reload }
+}
+
+// Reservasi yang belum datang pada satu tanggal (bagian Reservasi di Antrean), urut jam reservasi.
+// Diperbarui otomatis seperti papan. → { data: visits[] | null, error, reload }
+export function useReservations(date) {
+  const [state, setState] = useState(null)
+  const [error, setError] = useState(null)
+  const latest = useRef(0)
+
+  const reload = useCallback(() => {
+    const ticket = ++latest.current
+    return fetchActiveVisits({ date })
+      .then((visits) => {
+        if (ticket !== latest.current) return
+        setState({ date, visits: visits.filter((visit) => visit.status === 'RESERVASI') })
+        setError(null)
+      })
+      .catch((err) => {
+        if (ticket === latest.current) setError(err)
+      })
+  }, [date])
+
+  useEffect(() => {
+    reload()
+    const timer = setInterval(() => {
+      if (!document.hidden) reload()
+    }, REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [reload])
+
+  return { data: state?.date === date ? state.visits : null, error, reload }
+}
+
+// Kunjungan aktif pada satu tanggal + kondisi ruangan (info "Urutan ke-N" di Pendaftaran).
+// reload() dipanggil setelah pendaftaran berhasil supaya urutan langsung benar.
+// date kosong → tidak memuat apa pun. → { data: { date, visits, rooms, loadedAt } | null, error }
+export function useDayVisits(date) {
+  const [state, setState] = useState(null)
+  const [error, setError] = useState(null)
+  const latest = useRef(0)
+
+  const reload = useCallback(() => {
+    if (!date) return Promise.resolve()
+    const ticket = ++latest.current
+    return Promise.all([fetchActiveVisits({ date }), getQueueRooms()])
+      .then(([visits, rooms]) => {
+        if (ticket !== latest.current) return
+        setState({ date, visits, rooms, loadedAt: new Date() })
+        setError(null)
+      })
+      .catch((err) => {
+        if (ticket === latest.current) setError(err)
+      })
+  }, [date])
+
+  useEffect(() => {
+    reload()
+    const timer = setInterval(() => {
+      if (!document.hidden) reload()
+    }, REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [reload])
+
+  // Data tanggal lain (sebelum data baru tiba) tidak ditampilkan.
+  return { data: state?.date === date ? state : null, error: date ? error : null, reload }
 }

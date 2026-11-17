@@ -1,124 +1,142 @@
-# Modul Kasir
+# Modul Pendaftaran & Riwayat (folder `kasir`)
 
-Pegangan kerja modul **Kasir dan Pembayaran** (SRS 4.3, 5.1). Aturan umum ada di [README frontend](../../../README.md).
+Pegangan kerja menu **Pendaftaran** (tab **Di Tempat** dan **Reservasi**) dan **Riwayat**. Aturan umum ada di [README frontend](../../../README.md).
 
 ## Tujuan
-Menerima pembayaran, menyelesaikan sesi, mencetak nota, mengembalikan kelebihan bayar, mengoreksi transaksi, dan menampilkan riwayat transaksi.
-FR-06, FR-07, FR-09, FR-10, FR-12, FR-14 · UC-13 s.d. UC-15, UC-17 s.d. UC-20.
+- **Di Tempat:** pelanggan di studio memilih paket, latar, jumlah orang, dan tambahan, lalu **membayar lunas** dan langsung masuk antrean. Nota tercetak setelah bayar.
+- **Reservasi:** pesanan lewat WhatsApp dicatat dengan **paket (wajib)**, tanggal & jam (tidak boleh bentrok di paket yang sama), dan **DP atau Lunas** lewat Transfer/QRIS. Pelanggan muncul di Antrean › **Reservasi**, lalu masuk antrean lewat **Sudah Datang**.
+- **Riwayat:** daftar sesi yang sudah berakhir (Selesai & Dibatalkan) pada **satu tanggal** (Admin & Owner bebas memilih tanggal), detail transaksi, dan cetak ulang nota. Uang penjualan dilihat di menu **Laporan** (Admin: hari ini).
 
 ## Penanggung jawab
 **Ihsan**
 
+## Alur Di Tempat
+1. Admin mengisi data pelanggan dan memilih tambahan (tambah waktu/cetak) di kiri, lalu metode dan nominal pembayaran di kanan.
+2. **Konfirmasi & Masuk Antrean** → satu permintaan ke backend: kunjungan dibuat, tambahan dicatat, pembayaran diterima. Kalau tidak lunas, semuanya dibatalkan.
+3. Muncul **pop-up Berhasil**: nomor antrean besar (`RG-001`), Lunas, Kembalian, tombol **Cetak Nota** (nota tidak terbuka otomatis) dan **Pendaftaran Baru**. Pembayarannya langsung masuk Laporan sebagai baris **Lunas** (penjualan = uang masuk per pembayaran).
+4. Di Antrean: Panggil → Mulai Foto → **Selesai**. Sesi masuk Riwayat.
+
+## Alur Reservasi
+1. Tab **Reservasi** (kanan atas, tersimpan di URL `?tab=reservasi`).
+2. Kiri **Pelanggan**:
+   - Nama panggilan *, No. WhatsApp (opsional, 8–15 angka; **hanya angka**: huruf, spasi, tanda hubung dibuang saat diketik/ditempel);
+   - semua baris memakai lajur yang sama dengan Paket | Latar | Jumlah Orang (`PACKAGE_GRID`): Nama & Tanggal selebar Paket, No. WA & Jam selebar Latar + Jumlah Orang;
+   - Paket * / Latar * / Jumlah Orang *, Tambahan;
+   - Tanggal * + Jam (WIB) *: pilihan jam **dari backend** (`useReservationSlots` → `GET /reservations/availability`): per 15 menit 13.15–20.45, belum lewat, dan **tidak bentrok** dengan reservasi lain di paket yang sama. Lama pemakaian = durasi paket (kosong → 15 menit) + tambah waktu. Jam nonaktif "Pilih paket dulu" sebelum paket dipilih; jam yang jadi bentrok (mis. tambah waktu ditambah) ditandai "(terisi)".
+3. Kanan **Pembayaran** (wajib):
+   - **DP**: nominal diketik Admin, harus < total (dicek langsung); baris "Sisa saat datang";
+   - **Lunas**: nominal otomatis = total (hanya baca);
+   - Metode **Transfer/QRIS** saja; Referensi opsional (Transfer).
+4. **Simpan Reservasi** → pop-up **Reservasi Tersimpan**: jam besar, tanggal, paket, "DP · metode"/"Lunas · metode", Sisa; **Cetak Nota** hanya bila lunas; **Reservasi Baru**.
+5. Sebelum datang, reservasi bisa diubah lewat Antrean › Detail › **Ubah Reservasi** (paket, tambahan, jadwal, nama, WA). Lebih mahal → sisa dibayar saat datang; lebih murah dari yang sudah dibayar → kelebihan **dikembalikan** (Tunai/Transfer).
+6. Saat pelanggan datang → Antrean › Reservasi › **Sudah Datang** (lihat [README antrean](../antrean/README.md)): tambahan boleh ditambah, bayar sisa, nomor `RG-R001`, urutan sesuai jam reservasi.
+
+Kedua tab tetap terpasang (yang tidak aktif disembunyikan), jadi isian tidak hilang saat pindah tab.
+Setelah masuk antrean (Di Tempat lunas saat daftar, reservasi setelah Sudah Datang), paket dan tambahan **tidak bisa diubah** (backend: `PAID_LOCKED`); nanti lewat fitur koreksi.
+
 ## Halaman & komponen
-| File | Layar di Figma | Peran | Status |
-|---|---|---|---|
-| `pages/CashierPage.jsx` | Kasir (`UIUX/PNG/05_Kasir_Admin.png`): 3 kolom + tombol "+ Pelanggan Baru (Bayar Awal)" | Admin | Selesai |
-| `components/ActiveVisitList.jsx` | kolom Pelanggan Aktif + pencarian nama/nomor antrean | Admin | Selesai |
-| `components/BillDetails.jsx` | kolom Rincian Tagihan: item aktif, total, sudah dibayar, sisa/lunas/kelebihan, riwayat pembayaran | Admin | Selesai |
-| `components/SessionAdjustments.jsx` | selama sesi foto: tambahan layanan (+/−) dan jumlah orang akhir | Admin | Selesai |
-| `components/PaymentPanel.jsx` | kolom Pembayaran: Tunai/Transfer/QRIS, kembalian, refund kelebihan bayar, Selesaikan & Cetak Nota | Admin | Selesai |
-| `cashier.js` | logika: label rincian, `canReceivePayment`, `finishBlocker`, peta error | — | Selesai |
-| `pages/HistoryPage.jsx` | Riwayat (`UIUX/PNG/06_…`): filter tanggal, 4 kartu statistik, daftar, panel koreksi (Admin) | Admin; Owner lihat | Selesai |
-| `components/HistoryList.jsx` | Daftar Transaksi Selesai & Dibatalkan + pencarian | Admin; Owner lihat | Selesai |
-| `components/TransactionDetailModal.jsx` | detail transaksi, cetak ulang nota, riwayat koreksi | Admin; Owner lihat | Selesai |
-| `components/CorrectionPanel.jsx` | Koreksi Data Transaksi: nama pelanggan, metode/referensi pembayaran + alasan | Admin | Selesai |
-| `components/AuditList.jsx` | daftar koreksi (nilai lama → baru, alasan, waktu) | Admin; Owner lihat | Selesai |
+| File | Isi | Peran |
+|---|---|---|
+| `pages/RegistrationPage.jsx` | `/pendaftaran`: judul + tab Di Tempat/Reservasi (`SegmentedControl` berikon); memuat katalog | Admin |
+| `components/WalkInForm.jsx` | tab Di Tempat: kartu Pelanggan (kiri) + Pembayaran (kanan), pop-up Berhasil | Admin |
+| `components/ReservationForm.jsx` | tab Reservasi: isian (`ReservationFields`) + DP/Lunas; pop-up Reservasi Tersimpan | Admin |
+| `components/ReservationFields.jsx` | isian reservasi: Nama, WA, Paket/Latar/Orang, Tambahan, chip, Tanggal + Jam (dipakai juga pop-up Ubah Reservasi) | Admin |
+| `components/BillSummary.jsx` | rincian + Total (+ "Sudah dibayar" & sisa bila ada uang masuk; label sisa lewat `dueLabel`); `SummaryRow` | — |
+| `components/PaymentFields.jsx` | Metode, Uang diterima (cek langsung "Kurang RpX") / Nominal, Referensi, Kembalian | Admin |
+| `components/RegistrationSuccess.jsx` | pop-up Berhasil: nomor antrean, Lunas, Kembalian, Cetak Nota (Di Tempat & Sudah Datang) | Admin |
+| `components/AddonPicker.jsx` | tambahan yang diizinkan paket (+/−); `min` = jumlah minimum per tambahan (Sudah Datang) | Admin |
+| `components/PackageSummary.jsx` | chip kapasitas · durasi (· urutan · ruangan bila ada `data`); `Chip` | Admin |
+| `pages/HistoryPage.jsx` | `/riwayat`: pilihan satu Tanggal, 3 kartu (Total Sesi, Selesai, Dibatalkan), daftar | Admin & Owner |
+| `components/HistoryList.jsx` | daftar sesi + pencarian (nomor, nama, paket, no. transaksi) | Admin & Owner |
+| `components/TransactionDetailModal.jsx` | rincian, total, pembayaran ("DP · metode"), **dikembalikan** (refund), kembalian, waktu lunas, alasan batal, Cetak Ulang Nota | Admin & Owner |
+| `useCatalog.js` | katalog paket + tambahan untuk form (dipakai juga pop-up Sudah Datang & Ubah Reservasi) | — |
+| `useReservationSlots.js` | `useReservationSlots` (pilihan jam dari backend) + `useReservationTime` (opsi Jam, placeholder, "(terisi)"; saat ubah, jam semula tetap bisa dipilih) | — |
+| `reservation.js` | `normalizePhone`, `validPhone`, `liveReservationErrors`, `validateReservation`, `reservationPayload` (form Reservasi & Ubah Reservasi) | — |
+| `cashier.js` | `PAYMENT_METHODS`, `RESERVATION_METHODS`, `bookingMinutes`, `billPreview`, `editBillPreview` (paket sama → harga saat reservasi), `billFromDetail`, `cashError`, `paymentPayload`, `successInfo`, `activeItems`, `itemLabel`, `totalChange`, `methodLabel` | — |
 
-Komponen dasar yang sudah tersedia (`@/shared/components/ui`, contoh di `/dev/komponen`):
-- `Card`: tiga kolom Kasir;
-- `SegmentedControl tone="brand"`: pilihan metode Tunai/Transfer/QRIS;
-- `Button variant="primary"` (Terima Pembayaran) dan `variant="success"` (Selesaikan & Cetak Nota);
-- `StatCard` + `Table`: ringkasan dan daftar di Riwayat;
-- `Badge`: status bayar.
-
-Route: `/kasir` = daftar pelanggan aktif; `/kasir/:id` = pelanggan (kunjungan) terpilih.
+Dipakai ulang dari `antrean`: `PackageFields`, `useDayVisits`, `packageQueue`, `queueLabel`, `interpretSaveError`.
 
 ## Hak akses
 | Tindakan | Admin | Owner |
 |---|---|---|
-| Kasir: bayar, selesaikan sesi, refund, cetak nota | ✓ | — (tidak ada menu Kasir) |
-| Riwayat: lihat, riwayat koreksi, cetak ulang nota | ✓ | ✓ |
-| Riwayat: koreksi transaksi | ✓ | — |
+| Pendaftaran Di Tempat & Reservasi | ✓ | — (tidak ada menu) |
+| Riwayat: lihat (tanggal mana pun), detail, cetak ulang nota | ✓ | ✓ |
 
 ## API (`api.js`)
 | Fungsi | Endpoint | Dipakai untuk |
 |---|---|---|
-| `getActiveVisits(params)` | `GET /visits?history=false` | Kolom Pelanggan Aktif: `{ date, page, search }` |
-| `getCashierDetail(visitId)` | `GET /visits/:id` | Rincian tagihan |
-| `setTransactionAddons(trxId, data)` | `PUT /transactions/:id/addons` | Tambahan selama sesi: `{ version, addons: [{ addon_id, qty }], reason }` |
-| `addPayment(trxId, data)` | `POST /transactions/:id/payments` | Terima pembayaran |
-| `finishVisit(visitId, data)` | `POST /visits/:id/finish` | Selesaikan sesi (+ pembayaran/refund terakhir) |
-| `addRefund(trxId, data)` | `POST /transactions/:id/refunds` | Kembalikan kelebihan bayar |
-| `downloadReceipt(trxId)` | `GET /transactions/:id/receipt.pdf` | Nota PDF → `openBlob()` untuk mencetak |
-| `getHistory(params)` | `GET /visits?history=true` | Riwayat: `{ page, search, from, to }`, maks. 100 per halaman |
-| `addCorrection(trxId, data)` | `POST /transactions/:id/corrections` | Koreksi (Admin) |
-| `getAudit(trxId)` | `GET /transactions/:id/audit` | Riwayat koreksi |
+| `registerWalkIn(data)` | `POST /visits/walk-in` | Di Tempat: daftar + tambahan + bayar lunas (atomik) |
+| `registerReservation(data)` | `POST /visits/reservation` | Reservasi: paket + jadwal + tambahan + DP/LUNAS (atomik; `RESERVATION_CLASH` bila bentrok) |
+| `getReservationSlots(params)` | `GET /reservations/availability` | Pilihan jam: `{ date, package_id, minutes }` (+ `visit_id` saat ubah) → `{ slots }` |
+| `checkInReservation(id, data)` | `POST /visits/:id/check-in` | Sudah Datang, termasuk tambahan baru (dipakai `antrean/components/CheckInModal`) |
+| `updateReservation(id, data)` | `PUT /visits/:id/reservation` | Ubah Reservasi + refund kelebihan bayar (dipakai `antrean/components/ReservationEditModal`) |
+| `getTransactionDetail(visitId)` | `GET /visits/:id` | Detail di Riwayat |
+| `getHistory(params)` | `GET /visits?history=true` | Riwayat: `{ date, page }`, maks. 100 per halaman |
+| `downloadReceipt(trxId)` | `GET /transactions/:id/receipt.pdf` | Nota PDF → `openBlob()` |
+| `addPayment(trxId, data)` | `POST /transactions/:id/payments` | Belum dipakai |
 
-Data penting dari `getCashierDetail`:
-- `balance = { paid, refunded, net, due, surplus }`: `due` = sisa tagihan, `surplus` = kelebihan bayar.
-- `items` dengan `is_active = 1` = tagihan saat ini.
-- Simpan `visit.version` dan `transaction.version` terbaru untuk request berikutnya.
-- Reservasi yang belum memilih paket: `due = 0` **bukan** berarti lunas.
+Body `registerWalkIn`:
+```js
+{
+  client_request_id, customer_name, package_id, background_id, persons,
+  addons: [{ addon_id, qty }],
+  payment: { client_request_id, method: 'TUNAI' | 'TRANSFER' | 'QRIS', amount, reference },
+}
+```
+
+Body `registerReservation`:
+```js
+{
+  client_request_id, customer_name, phone, appointment_at: 'YYYY-MM-DD HH:mm:00',
+  package_id, background_id, persons, // wajib
+  addons: [{ addon_id, qty }],
+  payment: { client_request_id, type: 'DP' | 'LUNAS', method: 'TRANSFER' | 'QRIS', amount, reference },
+}
+```
+
+Body `updateReservation` (seluruh isian akhir; `refund` dikirim bila sudah ada uang masuk, dipakai backend hanya bila ada kelebihan):
+```js
+{
+  version, customer_name, phone, appointment_at: 'YYYY-MM-DD HH:mm:00',
+  package_id, background_id, persons, addons: [{ addon_id, qty }],
+  refund: { client_request_id, method: 'TUNAI' | 'TRANSFER' },
+}
+```
 
 ## Aturan wajib
-- Pembayaran boleh di awal, berupa DP, atau sebagian. **Mulai foto** (di Antrean) hanya bisa jika tagihan awal lunas.
-- Tambahan selama sesi (tambah waktu, tambah cetak) dicatat lalu dibayar di akhir.
-- Tombol **"Selesaikan & Cetak Nota" nonaktif selama `balance.due > 0`** atau masih ada kelebihan bayar yang belum dikembalikan.
-- `finishVisit` mengirim jumlah orang akhir dan **seluruh** tambahan (array kosong jika tidak ada). Prosesnya atomik: kalau saldo tidak pas, semuanya dibatalkan.
-- Tunai: `amount` = uang yang diserahkan pelanggan; kembalian dihitung backend, tampilkan dari respons. Transfer/QRIS tidak boleh melebihi sisa tagihan.
-- Metode: Tunai, Transfer, QRIS. Tulis **"QRIS"**, bukan "QRIS Dinamis".
-- Refund hanya untuk kelebihan bayar (mis. ganti ke paket lebih murah). Pembatalan tidak mengembalikan uang.
-- Pembayaran tidak bisa dihapus; salah input diperbaiki lewat koreksi. Koreksi transaksi yang sudah lunas wajib alasan. Transaksi batal hanya boleh dikoreksi nama/penerimaannya.
-- Nota hanya ada setelah Selesai; cetak ulang dari Riwayat.
-- `client_request_id = newRequestId()` sekali per pembayaran/refund; pakai ulang saat mencoba lagi.
-- Selama sesi: tambahan layanan disimpan dengan `setTransactionAddons` (alasan otomatis "Tambahan layanan selama sesi"), jumlah orang akhir dengan `updateVisitSelection` dari modul antrean (paket & latar tetap). Lalu bayar sisa, baru "Selesaikan & Cetak Nota" (mengirim jumlah orang & tambahan yang sama → tidak perlu alasan).
-- Reservasi yang belum datang: pembayaran otomatis bertipe **DP** (nontunai wajib referensi). Selain itu bertipe Pembayaran.
-- Data Kasir (pelanggan, rincian, katalog paket/tambahan) diperbarui otomatis tiap 15 detik.
+- **Tunai:** `amount` = uang yang diterima (≥ sisa); kembalian dihitung backend.
+- **Transfer/QRIS:** nominal otomatis = sisa tagihan, kembalian Rp0.
+- **Referensi** hanya muncul untuk Transfer (opsional).
+- Metode ditulis **"QRIS"**, bukan "QRIS Dinamis".
+- Total di form hanya perkiraan; total resmi dari backend.
+- `client_request_id` dibuat sekali per pengisian form dan dipakai ulang saat mencoba lagi, supaya klik ganda tetap 1 transaksi.
+- Jumlah orang, uang tunai, nominal DP, dan No. WhatsApp dicek **langsung saat diketik**.
+- Nota tersedia sejak lunas: dicetak dari pop-up, lalu bisa dicetak ulang dari Antrean (Detail) atau Riwayat.
+- Pembatalan tidak mengembalikan uang (DP maupun reservasi lunas). Uang hanya dikembalikan saat **Ubah Reservasi** membuat total lebih kecil dari yang sudah dibayar.
+- "Lunas" dibaca dari `transaction.payment_status`, bukan `paid_off_at` (tetap terisi walau paket dinaikkan setelah lunas).
 
 ## Error yang ditangani khusus
 | Kode | Tindakan di tampilan |
 |---|---|
-| `UNSETTLED` | Masih ada sisa tagihan/kelebihan bayar saat menyelesaikan (seharusnya tombol sudah nonaktif) |
-| `EXCESS_NONCASH` | Transfer/QRIS melebihi sisa tagihan |
-| `INVALID_CASH` | Uang tunai kurang |
-| `NO_OUTSTANDING` | Tidak ada sisa tagihan |
-| `REFUND_EXCEEDS_SURPLUS`, `REFUND_NOT_ALLOWED` | Refund melebihi kelebihan bayar / tidak diizinkan |
-| `REASON_REQUIRED` | Perubahan transaksi lunas wajib alasan |
-| `INVALID_BALANCE`, `UNSETTLED_CORRECTION` | Koreksi membuat saldo tidak seimbang |
-| `CANCELLED` | Transaksi batal hanya bisa dikoreksi nama/penerimaan |
-| `TERMINAL_VISIT` | Kunjungan sudah berakhir |
-| `RECEIPT_NOT_READY` | Nota baru ada setelah Selesai |
-| `FUTURE_PAYMENT` | Tanggal penerimaan di masa depan |
-| `REFERENCE_REQUIRED` | Pembayaran nontunai wajib referensi |
-| `STALE_VERSION` | Data berubah di komputer lain: muat ulang, jangan kirim ulang otomatis |
+| `PAYMENT_NOT_SETTLED`, `PAYMENT_REQUIRED`, `INVALID_CASH`, `DP_TOO_LARGE` | Nominal salah; tandai kolom nominal |
+| `PACKAGE_REQUIRED`, `PERSONS_LIMIT`, `BACKGROUND_REQUIRED`, `BACKGROUND_CAPACITY`, `PACKAGE_INACTIVE`, `DP_EXCEEDS_TOTAL` | Isian paket/latar/jumlah orang salah; tandai kolomnya |
+| `APPOINTMENT_INVALID`, `PAST_APPOINTMENT`, `RESERVATION_CLASH` | Jam/tanggal reservasi salah atau bentrok; tandai kolomnya |
 | `IDEMPOTENCY_CONFLICT` | Request ID dipakai untuk data berbeda; isi ulang form |
-
-## Hubungan dengan modul lain
-- **Dari `antrean`:** tombol "Selesaikan sesi" dan penolakan "Mulai foto" membuka `/kasir/:id` (`id` = id kunjungan). Jangan ubah format alamat ini tanpa koordinasi.
-- **Memakai dari `paket`:** `getAddons()` dan `getPackages()` (`@/modules/paket/api`) untuk pilihan tambahan dan ganti paket.
-
-## Checklist selesai
-- [x] Kolom pelanggan aktif + pencarian, klik → `/kasir/:id`
-- [x] Rincian tagihan (item, tambahan, total, sudah bayar, sisa)
-- [x] Form pembayaran Tunai/Transfer/QRIS + kembalian
-- [x] Konfirmasi akhir sesi (jumlah orang akhir + tambahan)
-- [x] "Selesaikan & Cetak Nota" nonaktif selama ada sisa tagihan; nota terbuka setelah selesai
-- [x] Refund kelebihan bayar
-- [x] Riwayat + pencarian + cetak ulang nota
-- [x] Panel koreksi (Admin) + riwayat koreksi (Admin & Owner)
-- [x] Tombol bayar/simpan memakai `loading` (anti klik ganda)
-- [x] `npm run build` dan `npm run lint` lulus
-- [ ] Semua langkah uji di bawah lulus
+| `RECEIPT_NOT_READY` | Nota belum ada (transaksi belum lunas) |
 
 ## Cara mengetes
-1. Paket Rp100.000, bayar Tunai Rp150.000 → kembalian Rp50.000.
-2. Mulai foto (di Antrean) → tambah waktu Rp20.000 → tombol Selesaikan nonaktif → bayar Rp20.000 → tombol aktif → selesai dan nota terbuka.
-3. Transfer melebihi sisa tagihan → ditolak.
-4. Setelah lunas dan sebelum dipanggil, ganti ke paket lebih murah → Mulai foto ditolak karena ada kelebihan bayar → refund kelebihan bayar → Mulai foto berhasil.
-5. Riwayat: koreksi metode bayar dengan alasan → riwayat koreksi bertambah. Login Owner → riwayat koreksi terlihat, tombol koreksi tidak ada.
-6. Cetak ulang nota dari Riwayat.
-7. Tekan Bayar dua kali dengan cepat → hanya 1 pembayaran tercatat.
+1. Di Tempat: pilih paket → chip kapasitas, durasi, urutan, ruangan tampil; tambah waktu 2 → durasi & total naik. Jumlah orang melebihi kapasitas → pesan langsung. Tunai kurang → "Kurang RpX"; lebih → kembalian benar.
+2. Konfirmasi → pop-up Berhasil (nomor `RG-00x`, kembalian) → Cetak Nota → Pendaftaran Baru → form kosong; pelanggan muncul di Antrean. Klik Konfirmasi dua kali cepat → hanya 1 transaksi.
+3. Tab Reservasi: sebelum pilih paket → Lunas & Jam nonaktif; metode hanya Transfer/QRIS. Paket + DP → tersimpan, tanpa Cetak Nota.
+4. Reservasi kedua di paket yang sama & hari yang sama → jam yang tumpang-tindih tidak muncul (paket 20 menit di 14.00 → 14.15 hilang, 14.30 ada).
+5. Paket + DP ≥ total → pesan "DP harus kurang dari total… Pilih Lunas". Pilih Lunas → nominal = total → simpan → Cetak Nota tersedia.
+6. Reservasi muncul di Antrean › Reservasi pada tanggalnya; Sudah Datang → bayar sisa → nomor `RG-R00x`.
+7. Ubah Reservasi yang lunas ke harga lebih murah → Simpan dengan "Dikembalikan lewat" → Riwayat/Detail menampilkan "Dikembalikan · metode −RpX".
+8. Riwayat: pilihan satu tanggal (Admin & Owner), 3 kartu tanpa total uang.
+9. Login Owner → tidak ada menu Pendaftaran.
 
-## Keterbatasan saat ini
-- Koreksi di Riwayat hanya untuk **nama pelanggan** dan **metode/referensi pembayaran** (nominal & waktu tetap). Koreksi nominal/harga rincian belum dibuat karena bisa membuat saldo transaksi selesai tidak pas (backend: `UNSETTLED_CORRECTION`).
-- Jumlah "Koreksi Data" dihitung dari audit tiap transaksi yang tampil (backend belum punya daftar audit global).
+Uji otomatis UI: `tools/ui-test/uji-reservasi.mjs` dan `uji-riwayat-laporan.mjs` (di luar repo).
+
+## Belum dibuat / ditunda
+- **Koreksi** transaksi setelah masuk antrean (ganti paket/tambahan, koreksi nama, salah metode bayar): endpoint backend ada, tampilan belum. Refund di luar Ubah Reservasi juga belum ada di tampilan.
+- Aturan DP otomatis (mis. persentase dari harga): sekarang nominal DP diketik Admin.
