@@ -230,16 +230,16 @@ export default function DashboardPage() {
                         #{rank}
                       </span>
                       <div className="min-w-0">
-                        <p className="wrap-anywhere text-sm font-bold text-slate-800 sm:truncate sm:text-base">{pkg.name}</p>
+                        <p className="max-sm:wrap-anywhere text-sm font-bold text-slate-800 sm:truncate sm:text-base">{pkg.name}</p>
                         <p className="text-xs text-slate-500">
                           {sessionsCount} Pembayaran
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex min-w-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-6">
-                      <div className="w-full min-w-0 text-right sm:w-auto">
-                        <p className="wrap-anywhere text-sm font-bold tabular-nums text-slate-800">
+                    <div className="flex flex-col items-end gap-1.5 max-sm:min-w-0 sm:flex-row sm:items-center sm:gap-6">
+                      <div className="text-right max-sm:w-full max-sm:min-w-0">
+                        <p className="max-sm:wrap-anywhere text-sm font-bold max-sm:tabular-nums text-slate-800">
                           {formatRupiah(pkg.sales ?? 0)}
                         </p>
                         <p className="hidden text-[11px] text-slate-500 sm:block">Total penjualan</p>

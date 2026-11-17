@@ -289,7 +289,7 @@ export default function PackageForm({ pkg = null, backgrounds = [], addons = [],
           </p>
         </section>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 max-sm:grid-cols-1 lg:grid-cols-2">
           <section>
             <SectionTitle
               aside={

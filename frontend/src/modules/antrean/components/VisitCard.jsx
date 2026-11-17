@@ -30,12 +30,12 @@ export default function VisitCard({ visit, ticket, title, meta, note, badge, act
         <div
           className={`flex w-19 shrink-0 sm:w-24 flex-col items-center justify-center rounded-2xl px-2 py-3 text-center ${TICKET_TONES[ticket.tone]}`}
         >
-          <span className="wrap-anywhere text-base leading-tight font-bold sm:text-lg">{ticket.code}</span>
+          <span className="text-base leading-tight font-bold max-sm:wrap-anywhere sm:text-lg">{ticket.code}</span>
           <span className="mt-0.5 text-[11px] font-semibold">{ticket.caption}</span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="wrap-anywhere font-bold text-slate-800">{title}</p>
+            <p className="font-bold text-slate-800 max-sm:wrap-anywhere">{title}</p>
             <SessionTimer visit={visit} />
           </div>
           {meta && <p className="mt-0.5 text-sm text-slate-500">{meta}</p>}

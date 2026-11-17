@@ -46,7 +46,7 @@ export default function PeriodFilter({
           }}
           className="flex flex-wrap items-end gap-2.5 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs"
         >
-          <div className="min-w-0 basis-full sm:basis-auto">
+          <div className="max-sm:min-w-0 max-sm:basis-full sm:min-w-36 sm:flex-initial">
             <Input
               label="Dari Tanggal"
               type="date"
@@ -54,7 +54,7 @@ export default function PeriodFilter({
               onChange={(event) => onFromChange(event.target.value)}
             />
           </div>
-          <div className="min-w-0 basis-full sm:basis-auto">
+          <div className="max-sm:min-w-0 max-sm:basis-full sm:min-w-36 sm:flex-initial">
             <Input
               label="Sampai Tanggal"
               type="date"

@@ -9,7 +9,7 @@ const TONES = {
 export default function StatCard({ label, value, hint, icon: Icon, tone = 'brand', className = '' }) {
   const style = TONES[tone]
   return (
-    <div className={`min-w-0 rounded-3xl border bg-linear-to-br p-3 sm:p-5 ${style.box} ${className}`}>
+    <div className={`max-sm:min-w-0 rounded-3xl border bg-linear-to-br p-3 sm:p-5 ${style.box} ${className}`}>
       <span aria-hidden="true" className={`block h-1 w-9 rounded-full ${style.accent}`} />
       <div className="mt-2 flex items-start justify-between gap-1 sm:mt-3 sm:gap-2">
         <p className="text-xs text-slate-500 sm:text-sm">{label}</p>

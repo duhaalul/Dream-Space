@@ -59,10 +59,10 @@ export default function HistoryList({ rows, packages, search, onSearch, onOpen, 
               >
                 <span className="col-span-2 text-xs font-bold text-brand-600 sm:col-span-1 sm:text-base">{queueLabel(row) ?? '—'}</span>
                 <span className="min-w-0">
-                  <span className="block wrap-anywhere font-semibold text-slate-800 sm:truncate">{row.customer_name}</span>
-                  <span className="block wrap-anywhere text-xs text-slate-500 sm:truncate">{meta(row, packages.get(row.package_id))}</span>
+                  <span className="block max-sm:wrap-anywhere font-semibold text-slate-800 sm:truncate">{row.customer_name}</span>
+                  <span className="block max-sm:wrap-anywhere text-xs text-slate-500 sm:truncate">{meta(row, packages.get(row.package_id))}</span>
                 </span>
-                <span className="text-right text-sm font-bold wrap-anywhere text-slate-800 sm:text-base sm:whitespace-nowrap">{formatRupiah(row.total)}</span>
+                <span className="text-right text-sm font-bold text-slate-800 max-sm:wrap-anywhere sm:text-base sm:whitespace-nowrap">{formatRupiah(row.total)}</span>
                 <span className="col-start-2 justify-self-end sm:col-start-auto sm:justify-self-start">
                   <Badge tone={VISIT_STATUS_TONES[row.status]}>{VISIT_STATUS_LABELS[row.status]}</Badge>
                 </span>

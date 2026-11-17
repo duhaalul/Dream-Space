@@ -316,7 +316,7 @@ export default function ReportsPage() {
         )}
 
         {/* Pilihan Jenis Laporan: L-01 Penjualan, L-02 Penjualan per Paket */}
-        <div className={isOwner ? 'flex flex-wrap items-end justify-between gap-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:p-3 sm:gap-4' : 'flex flex-wrap items-center justify-between gap-4'}>
+        <div className={isOwner ? 'flex flex-wrap items-center justify-between gap-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:p-3 sm:gap-4' : 'flex flex-wrap items-center justify-between gap-4'}>
           {isOwner && (
             <div className="grid w-full min-w-0 gap-3 sm:hidden">
               <Select

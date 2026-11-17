@@ -63,13 +63,13 @@ export default function ProfilePage() {
         {/* Kolom Kiri: Kartu Identitas Akun & Ubah Nama Tampilan */}
         <div className="space-y-6 lg:col-span-5">
           <Card>
-            <div className="flex items-center gap-3 sm:gap-5">
+            <div className="flex items-center max-sm:gap-3 sm:flex-row sm:text-left">
               <div className="flex h-12 w-12 shrink-0 sm:h-20 sm:w-20 items-center justify-center rounded-3xl bg-linear-to-br from-brand-500 via-cyan-500 to-emerald-500 text-3xl font-bold text-white shadow-md shadow-brand-500/20">
                 {initial}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 sm:ml-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="wrap-anywhere text-base font-bold sm:text-xl text-slate-800">{user.name}</h2>
+                  <h2 className="text-base font-bold max-sm:wrap-anywhere sm:truncate sm:text-xl text-slate-800">{user.name}</h2>
                   <Badge tone={isOwner ? 'brand' : 'green'}>{ROLE_LABELS[user.role]}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">

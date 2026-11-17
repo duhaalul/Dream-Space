@@ -39,15 +39,15 @@ export default function AppLayout() {
         <span aria-hidden="true" className="absolute top-1/3 -right-24 h-64 w-48 rounded-full bg-white/10" />
         <span aria-hidden="true" className="absolute bottom-20 -left-24 h-56 w-40 rounded-full bg-white/10" />
 
-        <div className="relative flex min-h-full w-full flex-col px-5 py-6">
-          <div className="flex items-start justify-between">
-            <img src={logoDs} alt="Dream Space" className="ml-2 w-20" />
-            {compact && (
+        <div className={compact ? 'relative flex min-h-full w-full flex-col px-5 py-6' : 'relative flex w-full flex-col px-5 py-6'}>
+          {compact ? (
+            <div className="flex items-start justify-between">
+              <img src={logoDs} alt="Dream Space" className="ml-2 w-20" />
               <button type="button" aria-label="Tutup menu" onClick={closeMobileMenu} className="grid size-11 place-items-center rounded-xl hover:bg-white/15">
                 <X aria-hidden="true" className="size-5" />
               </button>
-            )}
-          </div>
+            </div>
+          ) : <img src={logoDs} alt="Dream Space" className="ml-2 w-20" />}
 
           <div className="mt-8 flex items-center gap-3 border-b border-white/30 pb-5">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-brand-600">

@@ -223,7 +223,7 @@ export default function AddonManager({ addons = [], usage = {}, onChanged }) {
                     onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
                     className={`${ROW_INPUT} w-28 ${editErrors.price ? 'border-red-300' : ''}`}
                   />
-                  <div className="w-full max-w-56">
+                  <div className="w-56 max-sm:w-full max-sm:max-w-56">
                     <PerFields compact form={editForm} errors={editErrors} onChange={setEditForm} />
                   </div>
                   <Button size="sm" variant="primary" loading={busy === 'update'} onClick={() => handleUpdate(addon.id)}>

@@ -1,7 +1,7 @@
 // Kartu putih sesuai desain. description = subjudul abu-abu di bawah judul (opsional).
 export default function Card({ title, description, actions, className = '', children }) {
   return (
-    <section className={`min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6 ${className}`}>
+    <section className={`max-sm:min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6 ${className}`}>
       {(title || actions) && (
         <div className="mb-4 flex flex-wrap sm:mb-5 items-start justify-between gap-3">
           <div>

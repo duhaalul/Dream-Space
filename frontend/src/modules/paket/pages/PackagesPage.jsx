@@ -170,7 +170,7 @@ export default function PackagesPage() {
         title={isOwner ? 'Kelola Paket' : 'Paket'}
         code="T-07"
         actions={
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2.5 sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2.5 max-sm:w-full max-sm:min-w-0">
             <SegmentedControl
               label="Filter status paket"
               className="max-sm:grid max-sm:w-full max-sm:grid-cols-3 max-sm:[&>button]:px-1.5 max-sm:[&>button]:whitespace-normal"
