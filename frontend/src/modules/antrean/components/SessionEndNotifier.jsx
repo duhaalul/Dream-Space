@@ -69,7 +69,7 @@ export default function SessionEndNotifier() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-slate-800">
-              {formatQueueNumber(room.queue_code_snapshot, room.queue_number)} · {room.customer_name}
+              {formatQueueNumber(room.queue_code_snapshot, room.queue_number, room.customer_type)} · {room.customer_name}
             </p>
             <p className="text-xs font-semibold text-red-600 tabular-nums">Waktu habis · lewat {timer.label}</p>
           </div>

@@ -6,30 +6,8 @@ import { newRequestId } from '@/shared/utils/requestId'
 
 export const EMPTY_SELECTION = { package_id: '', background_id: '', persons: '' }
 
-// Studio buka 09.00–21.00 WIB → jam janji per 30 menit, terakhir 20.30.
-export const TIME_SLOTS = Array.from({ length: 24 }, (_, index) => {
-  const minutes = 9 * 60 + index * 30
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
-})
-
-const wibClock = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Asia/Jakarta',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-})
-
-// Jam sekarang di WIB, "HH:MM".
-export function nowWibTime() {
-  return wibClock.format(new Date())
-}
-
-// Jam janji yang masih bisa dipilih: untuk hari ini, jam yang sudah lewat disembunyikan.
-export function availableSlots(date, today) {
-  if (date !== today) return TIME_SLOTS
-  const now = nowWibTime()
-  return TIME_SLOTS.filter((slot) => slot > now)
-}
+// Pilihan jam reservasi (13.15–20.45 per 15 menit, belum lewat, tidak bentrok) dihitung backend:
+// GET /reservations/availability → kasir/useReservationSlots.js.
 
 // Satu set request ID per pengisian form (kunjungan + DP). Dipakai ulang saat
 // simpan ulang setelah gagal, diganti setelah sukses (NFR-02).
@@ -150,16 +128,20 @@ const FIELD_BY_CODE = {
   AMOUNT_LIMIT: 'amount',
   PAYMENT_NOT_SETTLED: 'amount',
   PAYMENT_REQUIRED: 'amount',
+  DP_TOO_LARGE: 'amount',
+  DP_EXCEEDS_TOTAL: 'package_id',
+  RESERVATION_CLASH: 'time',
 }
 
 const MESSAGE_BY_CODE = {
   DUPLICATE_VALUE: 'Referensi ini sudah pernah dipakai untuk pembayaran lain.',
-  EXCESS_NONCASH: 'DP Transfer/QRIS tidak boleh melebihi tagihan paket.',
+  EXCESS_NONCASH: 'Transfer/QRIS tidak boleh melebihi sisa tagihan.',
 }
 
 // Kolom dari VALIDATION_ERROR (details = zod issues, path mis. ["payment","reference"]).
 const FIELD_BY_PATH = {
   customer_name: 'customer_name',
+  phone: 'phone',
   appointment_at: 'time',
   package_id: 'package_id',
   background_id: 'background_id',
@@ -183,7 +165,7 @@ export function interpretSaveError(error) {
       fields: {},
       alert: {
         message:
-          'Pendaftaran sebelumnya ternyata sudah tersimpan dengan isian berbeda. Cek tab Per Paket dulu agar tidak dobel; tekan simpan lagi bila memang ingin mendaftarkan data baru.',
+          'Pendaftaran sebelumnya ternyata sudah tersimpan dengan isian berbeda. Cek Antrean dulu agar tidak dobel; tekan simpan lagi bila memang ingin mendaftarkan data baru.',
         requestId: error.requestId,
       },
       resetRequest: true,

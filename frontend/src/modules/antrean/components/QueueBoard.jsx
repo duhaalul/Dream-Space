@@ -4,24 +4,37 @@ import { Info } from 'lucide-react'
 import { useAuth } from '@/modules/akun/useAuth'
 import { Alert, Button } from '@/shared/components/ui'
 import { ROLES, VISIT_ACTIONS } from '@/shared/utils/constants'
+import { todayWib } from '@/shared/utils/format'
 import { backgroundNames, buildBoard, ticketFor, visitMeta } from '../queue'
-import { useQueueData } from '../useQueueData'
+import { useQueueData, useReservations } from '../useQueueData'
 import { useVisitActions } from '../useVisitActions'
 import { ActionFeedback, EmptyNote, QueueLoading, RefreshButton, Section } from './BoardParts'
+import CheckInModal from './CheckInModal'
 import PackageTiles from './PackageTiles'
+import ReservationEditModal from './ReservationEditModal'
+import ReservationSection from './ReservationSection'
 import RoomBanner from './RoomBanner'
 import VisitActionButtons from './VisitActionButtons'
 import VisitCard from './VisitCard'
 import VisitDetailModal from './VisitDetailModal'
 
-// Tab "Per Paket" di halaman Antrean (desain 03_Antrean). Admin: tombol tindakan. Owner: hanya melihat.
+// Halaman Antrean (desain 03_Antrean): papan per paket (Di Ruangan, Menunggu, Dilewati),
+// lalu bagian Reservasi (semua paket, per tanggal). Admin: tombol tindakan. Owner: hanya melihat.
 export default function QueueBoard() {
   const { user } = useAuth()
   const isAdmin = user.role === ROLES.ADMIN
   const [searchParams, setSearchParams] = useSearchParams()
   const { data, error, reload } = useQueueData()
-  const actions = useVisitActions(reload)
+  const [reservationDate, setReservationDate] = useState(todayWib)
+  const reservations = useReservations(reservationDate)
+  const reloadAll = () => {
+    reload()
+    reservations.reload()
+  }
+  const actions = useVisitActions(reloadAll)
   const [detailId, setDetailId] = useState(null)
+  const [checkInId, setCheckInId] = useState(null)
+  const [editingId, setEditingId] = useState(null)
 
   if (!data) return <QueueLoading error={error} onRetry={reload} />
 
@@ -71,14 +84,14 @@ export default function QueueBoard() {
       <ActionFeedback actions={actions} />
       {error && <Alert variant="warning">Gagal memperbarui data ({error.message}).</Alert>}
 
-      <Section title="Di Ruangan" aside={<RefreshButton loadedAt={data.loadedAt} onClick={reload} />}>
+      <Section title="Di Ruangan" aside={<RefreshButton loadedAt={data.loadedAt} onClick={reloadAll} />}>
         {room.inRoom ? card(room.inRoom) : <EmptyNote>Ruangan kosong.</EmptyNote>}
       </Section>
 
       <Section title={`Menunggu (${room.waiting.length})`} hint={isAdmin && room.waiting.length ? callBlocked : null}>
         {room.waiting.length ? (
           <div className="grid gap-4 xl:grid-cols-2">
-            {room.waiting.map((visit, index) => card(visit, { index, stacked: true, call: { isFirst: index === 0, blocked: callBlocked } }))}
+            {room.waiting.map((visit, index) => card(visit, { index, stacked: true, call: { blocked: callBlocked } }))}
           </div>
         ) : (
           <EmptyNote>Tidak ada yang menunggu.</EmptyNote>
@@ -91,6 +104,19 @@ export default function QueueBoard() {
         </Section>
       )}
 
+      <ReservationSection
+        date={reservationDate}
+        onDateChange={setReservationDate}
+        data={reservations.data}
+        error={reservations.error}
+        packages={data.packages}
+        isAdmin={isAdmin}
+        busy={actions.busyId !== null}
+        onCheckIn={(visit) => setCheckInId(visit.id)}
+        onCancel={(visit) => actions.ask(visit, VISIT_ACTIONS.CANCEL)}
+        onDetail={setDetailId}
+      />
+
       {detailId && (
         <VisitDetailModal
           key={detailId}
@@ -100,6 +126,24 @@ export default function QueueBoard() {
           onCancelVisit={(visit) => {
             setDetailId(null)
             actions.ask(visit, VISIT_ACTIONS.CANCEL)
+          }}
+          onEditReservation={(visit) => {
+            setDetailId(null)
+            setEditingId(visit.id)
+          }}
+        />
+      )}
+
+      {checkInId && <CheckInModal key={checkInId} visitId={checkInId} onClose={() => setCheckInId(null)} onDone={reloadAll} />}
+
+      {editingId && (
+        <ReservationEditModal
+          key={editingId}
+          visitId={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={() => {
+            setEditingId(null)
+            reservations.reload()
           }}
         />
       )}

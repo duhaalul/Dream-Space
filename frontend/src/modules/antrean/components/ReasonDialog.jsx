@@ -1,11 +1,11 @@
 import { useId, useState } from 'react'
-import { ArrowLeft, Megaphone, SkipForward, Undo2, XCircle } from 'lucide-react'
+import { ArrowLeft, SkipForward, Undo2, XCircle } from 'lucide-react'
 import { Button, Input, Modal } from '@/shared/components/ui'
 
 const MIN_REASON = 3 // backend: reason minimal 3 karakter
-const ICONS = { CALL: Megaphone, SKIP: SkipForward, RETURN: Undo2, CANCEL: XCircle }
+const ICONS = { SKIP: SkipForward, RETURN: Undo2, CANCEL: XCircle }
 
-// Dialog alasan untuk Lewati, Kembalikan, Batalkan, dan Panggil di luar urutan.
+// Dialog alasan untuk Lewati, Kembalikan, dan Batalkan (termasuk membatalkan reservasi).
 // config: { action, title, description?, confirmLabel, variant, placeholder } dari useVisitActions.
 // Pasang dengan key berbeda per kunjungan+tindakan supaya isian alasan selalu mulai kosong.
 export default function ReasonDialog({ config, busy, onCancel, onConfirm }) {

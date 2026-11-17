@@ -62,7 +62,7 @@ export default function HistoryList({ rows, packages, search, onSearch, onOpen, 
           ))}
         </ul>
       ) : (
-        <p className="py-4 text-sm text-slate-500">{keyword ? 'Tidak ada yang cocok.' : 'Belum ada sesi pada periode ini.'}</p>
+        <p className="py-4 text-sm text-slate-500">{keyword ? 'Tidak ada yang cocok.' : 'Belum ada sesi pada tanggal ini.'}</p>
       )}
     </Card>
   )

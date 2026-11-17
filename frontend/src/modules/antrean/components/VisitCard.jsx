@@ -6,17 +6,19 @@ import SessionTimer from './SessionTimer'
 const TICKET_TONES = {
   serving: 'bg-brand-50 text-brand-600', // Sedang foto
   called: 'bg-linear-to-br from-amber-500 to-red-500 text-white', // Dipanggil
-  priority: 'bg-amber-100 text-amber-800', // Prioritas
   normal: 'bg-slate-100 text-slate-700', // Urutan #n
   muted: 'bg-slate-100 text-slate-400', // Dilewati
   reservation: 'bg-brand-50 text-brand-600', // Reservasi
 }
 
-// Kartu satu pelanggan di papan antrean. Pelanggan sudah lunas saat mendaftar,
+// Kartu satu pelanggan di papan antrean. Pelanggan sudah lunas saat masuk antrean,
 // jadi status bayar hanya ditampilkan bila BELUM lunas (pengecualian yang perlu perhatian).
 // ticket: { code, caption, tone }, actions: tombol, stacked: tombol di bawah (grid 2 kolom).
-export default function VisitCard({ visit, ticket, title, meta, note, actions, stacked = false }) {
+// badge: { tone, label } mengganti badge bayar bawaan (kartu reservasi: "DP" / "Lunas").
+export default function VisitCard({ visit, ticket, title, meta, note, badge, actions, stacked = false }) {
   const unpaid = visit.payment_status && !['LUNAS', 'TIDAK_ADA_TAGIHAN'].includes(visit.payment_status)
+  const shownBadge =
+    badge ?? (unpaid ? { tone: PAYMENT_STATUS_TONES[visit.payment_status] ?? 'gray', label: PAYMENT_STATUS_LABELS[visit.payment_status] ?? visit.payment_status } : null)
 
   return (
     <article
@@ -38,9 +40,9 @@ export default function VisitCard({ visit, ticket, title, meta, note, actions, s
           </div>
           {meta && <p className="mt-0.5 text-sm text-slate-500">{meta}</p>}
           {note && <p className="mt-0.5 text-xs text-slate-400">{note}</p>}
-          {unpaid && (
-            <Badge tone={PAYMENT_STATUS_TONES[visit.payment_status] ?? 'gray'} className="mt-2">
-              {PAYMENT_STATUS_LABELS[visit.payment_status] ?? visit.payment_status}
+          {shownBadge && (
+            <Badge tone={shownBadge.tone} className="mt-2">
+              {shownBadge.label}
             </Badge>
           )}
         </div>

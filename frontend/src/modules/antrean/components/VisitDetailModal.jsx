@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Printer, XCircle } from 'lucide-react'
+import { Pencil, Printer, XCircle } from 'lucide-react'
 import { downloadReceipt } from '@/modules/kasir/api'
 import { Alert, Badge, Button, Modal } from '@/shared/components/ui'
 import { PAYMENT_METHOD_LABELS, VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from '@/shared/utils/constants'
 import { openBlob } from '@/shared/utils/download'
-import { formatRupiah, formatTime } from '@/shared/utils/format'
+import { formatDateTime, formatRupiah, formatTime } from '@/shared/utils/format'
 import { getVisit } from '../api'
-import { queueLabel } from '../queue'
+import { queueLabel, whatsappNumber } from '../queue'
 
-const ACTIVE = ['MENUNGGU', 'DIPANGGIL', 'DILEWATI']
+// Bisa dibatalkan Admin (sebelum foto dimulai), termasuk reservasi yang belum datang.
+const ACTIVE = ['RESERVASI', 'MENUNGGU', 'DIPANGGIL', 'DILEWATI']
 
 function Row({ label, children }) {
   return (
@@ -20,8 +21,10 @@ function Row({ label, children }) {
 }
 
 // Detail kunjungan (tombol "Detail" di Antrean): ringkas, hanya yang penting.
-// Admin bisa membatalkan (sebelum foto). onCancelVisit(visit) menutup modal lalu membuka dialog alasan.
-export default function VisitDetailModal({ visitId, isAdmin, onClose, onCancelVisit }) {
+// Reservasi: jadwal, No. WhatsApp, DP/Lunas (+ refund); Admin bisa Ubah Reservasi selama belum datang.
+// Admin bisa membatalkan (sebelum foto). onCancelVisit(visit) menutup modal lalu membuka dialog alasan;
+// onEditReservation(visit) menutup modal lalu membuka pop-up Ubah Reservasi.
+export default function VisitDetailModal({ visitId, isAdmin, onClose, onCancelVisit, onEditReservation }) {
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState(null)
   const [printing, setPrinting] = useState(false)
@@ -49,7 +52,17 @@ export default function VisitDetailModal({ visitId, isAdmin, onClose, onCancelVi
     const pkgName = active.find((item) => item.item_type === 'PAKET')?.description
     const addons = active.filter((item) => item.item_type === 'TAMBAHAN').map((item) => `${item.description} ×${item.qty}`)
     const methods = [...new Set(payments.map((payment) => PAYMENT_METHOD_LABELS[payment.method]))].join(', ')
-    const paid = Boolean(transaction.paid_off_at)
+    // Lunas dibaca dari status bayar sekarang (bukan paid_off_at: reservasi yang naik paket bisa belum lunas lagi).
+    const paid = transaction.payment_status === 'LUNAS'
+    const reservation = visit.customer_type === 'RESERVASI'
+    const wa = whatsappNumber(visit.phone)
+    const refunded = Number(balance.refunded ?? 0)
+    const refundText = refunded > 0 ? ` · dikembalikan ${formatRupiah(refunded)}` : ''
+    let payment = `Belum lunas · sisa ${formatRupiah(balance.due)}`
+    if (paid) payment = `Lunas ${formatRupiah(transaction.total)}${methods ? ` · ${methods}` : ''}${refundText}`
+    else if (reservation && balance.net > 0) {
+      payment = `Dibayar ${formatRupiah(balance.net)}${methods ? ` · ${methods}` : ''}${refundText}${pkgName ? ` · sisa ${formatRupiah(balance.due)}` : ''}`
+    }
 
     body = (
       <div className="space-y-4">
@@ -64,24 +77,40 @@ export default function VisitDetailModal({ visitId, isAdmin, onClose, onCancelVi
           </Alert>
         )}
         <dl className="space-y-2.5">
-          <Row label="Paket">{[pkgName ?? '-', transaction.background_snapshot, visit.persons && `${visit.persons} orang`].filter(Boolean).join(' · ')}</Row>
-          {addons.length > 0 && <Row label="Tambahan">{addons.join(', ')}</Row>}
-          <Row label="Pembayaran">
-            {paid ? `Lunas ${formatRupiah(transaction.total)}${methods ? ` · ${methods}` : ''}` : `Belum lunas · sisa ${formatRupiah(balance.due)}`}
+          {reservation && <Row label="Jadwal">{formatDateTime(visit.appointment_at)}</Row>}
+          {wa && (
+            <Row label="WhatsApp">
+              <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="font-medium text-brand-600 hover:underline">
+                {visit.phone}
+              </a>
+            </Row>
+          )}
+          <Row label="Paket">
+            {pkgName
+              ? [pkgName, transaction.background_snapshot, visit.persons && `${visit.persons} orang`].filter(Boolean).join(' · ')
+              : 'Belum dipilih'}
           </Row>
-          <Row label="Daftar">{formatTime(visit.created_at)}</Row>
+          {addons.length > 0 && <Row label="Tambahan">{addons.join(', ')}</Row>}
+          <Row label="Pembayaran">{payment}</Row>
+          <Row label="Daftar">{reservation ? formatDateTime(visit.created_at) : formatTime(visit.created_at)}</Row>
           {visit.cancel_reason && <Row label="Alasan batal">{visit.cancel_reason}</Row>}
         </dl>
       </div>
     )
 
     const canCancel = isAdmin && ACTIVE.includes(visit.status)
+    const canEdit = isAdmin && visit.status === 'RESERVASI' && onEditReservation
     if (paid || canCancel) {
       footer = (
         <>
           {canCancel && (
             <Button variant="danger" onClick={() => onCancelVisit(visit)}>
               <XCircle aria-hidden="true" className="h-4 w-4" /> Batalkan
+            </Button>
+          )}
+          {canEdit && (
+            <Button variant="soft" onClick={() => onEditReservation(visit)}>
+              <Pencil aria-hidden="true" className="h-4 w-4" /> Ubah Reservasi
             </Button>
           )}
           {paid && (

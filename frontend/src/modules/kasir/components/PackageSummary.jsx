@@ -10,7 +10,8 @@ const ROOM = {
   closed: { tone: 'red', label: 'Ditutup' },
 }
 
-function Chip({ icon: Icon, children }) {
+// Info kecil berbentuk pil (bukan kolom isian). Dipakai juga di pop-up Sudah Datang.
+export function Chip({ icon: Icon, children }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold whitespace-nowrap text-slate-700">
       <Icon aria-hidden="true" className="h-3.5 w-3.5 text-brand-500" />
@@ -20,7 +21,8 @@ function Chip({ icon: Icon, children }) {
 }
 
 // Satu baris info setelah paket dipilih: kapasitas · durasi · urutan · kondisi ruangan.
-// minutes = durasi paket + tambah waktu (null bila paket tanpa durasi). data = hasil useDayVisits(hari ini).
+// minutes = durasi paket + tambah waktu (null bila paket tanpa durasi).
+// data = hasil useDayVisits(hari ini); tanpa data (reservasi) → hanya kapasitas & durasi.
 export default function PackageSummary({ pkg, background, minutes, data }) {
   if (!pkg) return null
   const capacity = capacityInfo(pkg, background)

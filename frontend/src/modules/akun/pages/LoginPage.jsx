@@ -142,7 +142,7 @@ export default function LoginPage() {
 
         <p className="mx-auto mt-10 flex w-full max-w-lg items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-500">
           <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-slate-400" />
-          Sistem Operasional Aktif · Studio Buka Setiap Hari (09.00 – 21.00 WIB)
+          Sistem Operasional Aktif · Studio Buka Setiap Hari (13.00 – 21.00 WIB)
         </p>
       </main>
 

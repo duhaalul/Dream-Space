@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Plus, X } from 'lucide-react'
-import { Alert, Button, Input, Modal, Select } from '@/shared/components/ui'
+import { Alert, Button, Input, Modal, Select, numberGuard } from '@/shared/components/ui'
 import { PRICE_TYPE_LABELS } from '@/shared/utils/constants'
 import { formatRupiah } from '@/shared/utils/format'
 import { createPackageSetup, updatePackageSetup } from '../api'
@@ -278,6 +278,7 @@ export default function PackageForm({ pkg = null, backgrounds = [], addons = [],
             Contoh
             <input
               type="number"
+              {...numberGuard()}
               min="1"
               aria-label="Jumlah orang contoh"
               value={previewPersons}
@@ -327,6 +328,7 @@ export default function PackageForm({ pkg = null, backgrounds = [], addons = [],
                             <input
                               aria-label="Maks. orang latar"
                               type="number"
+                              {...numberGuard()}
                               min="1"
                               placeholder="Ikut paket"
                               value={row.max_persons}

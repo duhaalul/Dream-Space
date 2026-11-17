@@ -37,8 +37,8 @@ export const VISIT_STATUS_TONES = {
   DIBATALKAN: 'red',
 }
 
+// Reservasi masuk antrean lewat "Sudah Datang" (checkInReservation di kasir/api.js), bukan aksi ini.
 export const VISIT_ACTIONS = {
-  CONFIRM: 'CONFIRM', // Sudah datang
   CALL: 'CALL', // Panggil
   START: 'START', // Mulai foto
   SKIP: 'SKIP', // Lewati

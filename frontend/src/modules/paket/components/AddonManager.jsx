@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Package, Pencil, Plus, Sparkles, Timer, Trash2, X } from 'lucide-react'
-import { Alert, Button, Input, Modal } from '@/shared/components/ui'
+import { Alert, Button, Input, Modal, numberGuard } from '@/shared/components/ui'
 import { formatRupiah } from '@/shared/utils/format'
 import { createAddon, deleteAddon, updateAddon } from '../api'
 
@@ -54,6 +54,7 @@ function PerFields({ form, onChange, errors = {}, compact = false }) {
     <div className="flex gap-2">
       <input
         type="number"
+        {...numberGuard()}
         min="1"
         max="999"
         step="1"
@@ -215,6 +216,7 @@ export default function AddonManager({ addons = [], usage = {}, onChanged }) {
                   <input
                     aria-label="Harga tambahan"
                     type="number"
+                    {...numberGuard()}
                     min="0"
                     step="1"
                     value={editForm.price}

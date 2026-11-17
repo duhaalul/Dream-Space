@@ -78,6 +78,37 @@ export function useQueueData() {
   return { data, error, reload }
 }
 
+// Reservasi yang belum datang pada satu tanggal (bagian Reservasi di Antrean), urut jam reservasi.
+// Diperbarui otomatis seperti papan. → { data: visits[] | null, error, reload }
+export function useReservations(date) {
+  const [state, setState] = useState(null)
+  const [error, setError] = useState(null)
+  const latest = useRef(0)
+
+  const reload = useCallback(() => {
+    const ticket = ++latest.current
+    return fetchActiveVisits({ date })
+      .then((visits) => {
+        if (ticket !== latest.current) return
+        setState({ date, visits: visits.filter((visit) => visit.status === 'RESERVASI') })
+        setError(null)
+      })
+      .catch((err) => {
+        if (ticket === latest.current) setError(err)
+      })
+  }, [date])
+
+  useEffect(() => {
+    reload()
+    const timer = setInterval(() => {
+      if (!document.hidden) reload()
+    }, REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [reload])
+
+  return { data: state?.date === date ? state.visits : null, error, reload }
+}
+
 // Kunjungan aktif pada satu tanggal + kondisi ruangan (info "Urutan ke-N" di Pendaftaran).
 // reload() dipanggil setelah pendaftaran berhasil supaya urutan langsung benar.
 // date kosong → tidak memuat apa pun. → { data: { date, visits, rooms, loadedAt } | null, error }

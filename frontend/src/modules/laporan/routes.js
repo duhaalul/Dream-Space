@@ -15,7 +15,8 @@ export const laporanRoutes = [
   {
     path: '/laporan',
     component: ReportsPage,
-    roles: [ROLES.OWNER],
+    // Admin juga, tapi hanya laporan hari ini (dibatasi backend: REPORT_TODAY_ONLY).
+    roles: [ROLES.OWNER, ROLES.ADMIN],
     menu: { label: 'Laporan', order: 60, icon: ChartColumn },
   },
 ]

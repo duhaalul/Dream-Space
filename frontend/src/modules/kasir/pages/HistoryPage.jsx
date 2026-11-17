@@ -6,12 +6,10 @@ import { getHistory } from '../api'
 import HistoryList from '../components/HistoryList'
 import TransactionDetailModal from '../components/TransactionDetailModal'
 
-const MAX_DAYS = 366 // backend: rentang maksimal 367 hari
-
-async function fetchHistory(from, to) {
+async function fetchHistory(date) {
   const rows = []
   for (let page = 1; page <= 50; page += 1) {
-    const batch = await getHistory({ from, to, page })
+    const batch = await getHistory({ date, page })
     rows.push(...batch)
     if (batch.length < 100) break
   }
@@ -19,32 +17,26 @@ async function fetchHistory(from, to) {
   return rows.sort((a, b) => String(b.finished_at ?? b.updated_at).localeCompare(String(a.finished_at ?? a.updated_at)))
 }
 
-// T-06 Riwayat: sesi yang sudah berakhir (Selesai & Dibatalkan). Admin & Owner.
+// T-06 Riwayat: sesi yang sudah berakhir (Selesai & Dibatalkan) pada satu tanggal. Admin & Owner memilih tanggal.
+// Uang penjualan dilihat di menu Laporan (Admin: hari ini).
 export default function HistoryPage() {
   const today = todayWib()
-  const [range, setRange] = useState({ from: today, to: today })
-  const [rows, setRows] = useState(null)
+  const [date, setDate] = useState(today)
+  const [state, setState] = useState(null) // { date, rows }
   const [loadError, setLoadError] = useState(null)
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState(null)
   const [packages, setPackages] = useState(new Map())
 
-  const rangeError =
-    range.from > range.to
-      ? 'Tanggal awal setelah tanggal akhir.'
-      : (new Date(range.to) - new Date(range.from)) / 86_400_000 > MAX_DAYS
-        ? 'Rentang maksimal 367 hari.'
-        : null
-
   const load = useCallback(() => {
-    if (rangeError) return Promise.resolve()
-    return fetchHistory(range.from, range.to)
-      .then((list) => {
-        setRows(list)
+    if (!date) return Promise.resolve()
+    return fetchHistory(date)
+      .then((rows) => {
+        setState({ date, rows })
         setLoadError(null)
       })
       .catch(setLoadError)
-  }, [range.from, range.to, rangeError])
+  }, [date])
 
   useEffect(() => {
     load()
@@ -56,6 +48,8 @@ export default function HistoryPage() {
       .catch(() => {})
   }, [])
 
+  // Data tanggal sebelumnya tidak ditampilkan selama data tanggal baru dimuat.
+  const rows = state?.date === date ? state.rows : null
   const list = rows ?? []
   const finished = list.filter((row) => row.status === 'SELESAI').length
 
@@ -64,21 +58,16 @@ export default function HistoryPage() {
       <PageHeader
         title="Riwayat"
         code="T-06"
-        actions={
-          <div className="flex flex-wrap items-end gap-2">
-            <Input label="Dari" type="date" max={today} value={range.from} onChange={(event) => setRange({ ...range, from: event.target.value })} />
-            <Input label="Sampai" type="date" max={today} value={range.to} onChange={(event) => setRange({ ...range, to: event.target.value })} />
-          </div>
-        }
+        actions={<Input label="Tanggal" type="date" max={today} value={date} onChange={(event) => event.target.value && setDate(event.target.value)} />}
       />
 
-      {(rangeError || loadError) && (
-        <Alert variant="error" className="mb-4" requestId={loadError?.requestId}>
-          {rangeError ?? loadError.message}
+      {loadError && (
+        <Alert variant="error" className="mb-4" requestId={loadError.requestId}>
+          {loadError.message}
         </Alert>
       )}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-3 gap-3 sm:gap-4">
         <StatCard label="Total Sesi" value={list.length} />
         <StatCard tone="green" label="Selesai" value={finished} />
         <StatCard label="Dibatalkan" value={list.length - finished} />

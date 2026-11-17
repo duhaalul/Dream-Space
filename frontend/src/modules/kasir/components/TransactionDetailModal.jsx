@@ -40,7 +40,7 @@ export default function TransactionDetailModal({ visitId, onClose }) {
 
   let body = <p className="text-sm text-slate-500">Memuat…</p>
   if (detail) {
-    const { visit, transaction, payments } = detail
+    const { visit, transaction, payments, refunds = [] } = detail
     const paidAt = transaction.paid_off_at ?? payments.at(-1)?.paid_at
     body = (
       <div className="space-y-4">
@@ -67,7 +67,15 @@ export default function TransactionDetailModal({ visitId, onClose }) {
         {payments.length > 0 && (
           <div className="space-y-1.5 border-t border-slate-100 pt-3">
             {payments.map((payment) => (
-              <Row key={payment.id} label={methodLabel(payment.method)} value={formatRupiah(payment.cash_received ?? payment.amount)} />
+              <Row
+                key={payment.id}
+                label={`${payment.payment_type === 'DP' ? 'DP · ' : ''}${methodLabel(payment.method)}`}
+                value={formatRupiah(payment.cash_received ?? payment.amount)}
+              />
+            ))}
+            {/* Uang yang dikembalikan saat turun paket (Ubah Reservasi). */}
+            {refunds.map((refund) => (
+              <Row key={`refund-${refund.id}`} label={`Dikembalikan · ${methodLabel(refund.method)}`} value={formatRupiah(-refund.amount)} />
             ))}
             <Row label="Kembalian" value={formatRupiah(totalChange(detail))} />
             {paidAt && <Row label="Lunas" value={formatDateTime(paidAt)} />}

@@ -3,7 +3,8 @@ import { Button } from '@/shared/components/ui'
 import { formatRupiah } from '@/shared/utils/format'
 
 // Tambahan layanan yang diizinkan paket, dengan tombol −/+. value: { [addonId]: qty }.
-export default function AddonPicker({ addons, value, onChange, disabled = false }) {
+// min: { [addonId]: qty } — jumlah tidak bisa dikurangi di bawah ini (Sudah Datang: tambahan yang sudah dipesan).
+export default function AddonPicker({ addons, value, onChange, disabled = false, min = {} }) {
   if (!addons.length) return null
   return (
     <div>
@@ -21,7 +22,7 @@ export default function AddonPicker({ addons, value, onChange, disabled = false 
                 </span>
               </span>
               <span className="flex items-center gap-1">
-                <Button size="sm" variant="neutral" className="px-2.5!" aria-label={`Kurangi ${addon.name}`} disabled={disabled || qty === 0} onClick={() => set(qty - 1)}>
+                <Button size="sm" variant="neutral" className="px-2.5!" aria-label={`Kurangi ${addon.name}`} disabled={disabled || qty <= (min[addon.id] ?? 0)} onClick={() => set(qty - 1)}>
                   <Minus aria-hidden="true" className="h-3.5 w-3.5" />
                 </Button>
                 <span className="w-7 text-center text-sm font-semibold text-slate-800">{qty}</span>

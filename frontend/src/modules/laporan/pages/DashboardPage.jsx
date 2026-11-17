@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Award, Banknote, Camera, TrendingUp } from 'lucide-react'
+import { Award, Camera, TrendingUp } from 'lucide-react'
 import { Alert, Badge, Card, PageHeader, StatCard } from '@/shared/components/ui'
 import {
   REPORT_PERIODS,
@@ -8,9 +8,9 @@ import {
 } from '@/shared/utils/constants'
 import { formatDate, formatRupiah, todayWib } from '@/shared/utils/format'
 import { getDashboard, getReport } from '../api'
-import CashMethodChart from '../components/CashMethodChart'
 import PeriodFilter from '../components/PeriodFilter'
 import SalesChart from '../components/SalesChart'
+import SalesMethodChart from '../components/SalesMethodChart'
 import { buildPeriodQuery, validatePeriodRange } from '../periodUtils'
 
 // T-02 Dashboard — Owner. Harus nyaman dibuka di HP (NFR-03).
@@ -21,21 +21,13 @@ export default function DashboardPage() {
 
   const [dashboard, setDashboard] = useState(null)
   const [salesRows, setSalesRows] = useState([])
-  const [cashRows, setCashRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Semua angka Dashboard berdasar penjualan (transaksi lunas, tanpa yang dibatalkan).
   const fetchDashboardData = useCallback(async (query) => {
-    const [dashData, salesReport, cashReport] = await Promise.all([
-      getDashboard(query),
-      getReport('sales', query),
-      getReport('cash', query),
-    ])
-    return {
-      dashData,
-      salesRows: salesReport?.rows ?? [],
-      cashRows: cashReport?.rows ?? [],
-    }
+    const [dashData, salesReport] = await Promise.all([getDashboard(query), getReport('sales', query)])
+    return { dashData, salesRows: salesReport?.rows ?? [] }
   }, [])
 
   useEffect(() => {
@@ -48,7 +40,6 @@ export default function DashboardPage() {
         if (!active) return
         setDashboard(result.dashData)
         setSalesRows(result.salesRows)
-        setCashRows(result.cashRows)
       })
       .catch((err) => {
         if (active) setError(err)
@@ -82,7 +73,6 @@ export default function DashboardPage() {
       const result = await fetchDashboardData(buildPeriodQuery('custom', customFrom, customTo))
       setDashboard(result.dashData)
       setSalesRows(result.salesRows)
-      setCashRows(result.cashRows)
     } catch (err) {
       setError(err)
     } finally {
@@ -90,26 +80,10 @@ export default function DashboardPage() {
     }
   }
 
-  const totalPersonsServed = useMemo(
-    () => salesRows.reduce((sum, row) => sum + Number(row.persons ?? 0), 0),
-    [salesRows],
-  )
-
-  const cashBreakdown = useMemo(() => {
-    let tunai = 0
-    let nonTunai = 0
-    for (const row of cashRows) {
-      const net = Number(row.net ?? 0)
-      if (row.method === 'TUNAI') tunai += net
-      else nonTunai += net
-    }
-    return { tunai, nonTunai }
-  }, [cashRows])
-
-  // Paket terlaris: packages[0] bila sessions > 0; bila belum ada sesi tampilkan "Belum ada"
+  // Paket terlaris: packages[0] (urut penjualan) bila sudah ada uang masuk; bila belum tampilkan "Belum ada".
   const topPackage = useMemo(() => {
     const first = dashboard?.packages?.[0]
-    if (first && Number(first.sessions) > 0) return first
+    if (first && Number(first.sales) > 0) return first
     return null
   }, [dashboard])
 
@@ -126,7 +100,7 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         code="T-02"
-        description="Ringkasan penjualan, transaksi lunas, penerimaan kasir, dan performa paket."
+        description="Ringkasan uang masuk (DP & Lunas), transaksi lunas, dan performa paket."
         actions={
           <PeriodFilter
             period={period}
@@ -148,39 +122,30 @@ export default function DashboardPage() {
           </Alert>
         )}
 
-        {/* 4 Kartu Ringkasan Utama */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* 3 Kartu Ringkasan Utama */}
+        <div className="grid gap-4 sm:grid-cols-3">
           <StatCard
             label="Nilai Penjualan"
             value={formatRupiah(dashboard?.sales ?? 0)}
-            hint={`Transaksi selesai · ${periodRangeLabel}`}
+            hint={`DP ${formatRupiah(dashboard?.dp?.amount ?? 0)} · Lunas ${formatRupiah(dashboard?.lunas?.amount ?? 0)}${
+              dashboard?.refund?.amount ? ` · Refund −${formatRupiah(dashboard.refund.amount)}` : ''
+            }`}
             icon={TrendingUp}
             tone="brand"
           />
           <StatCard
             label="Transaksi Lunas"
-            value={`${Number(dashboard?.sessions ?? 0)} Transaksi`}
-            hint={
-              totalPersonsServed > 0
-                ? `${totalPersonsServed} pelanggan terlayani`
-                : 'Belum ada transaksi'
-            }
+            value={`${Number(dashboard?.lunas?.count ?? 0)} Transaksi`}
+            hint={periodRangeLabel}
             icon={Camera}
             tone="green"
-          />
-          <StatCard
-            label="Penerimaan Kasir"
-            value={formatRupiah(dashboard?.net_cash ?? 0)}
-            hint={`Tunai ${formatRupiah(cashBreakdown.tunai)} · Non-tunai ${formatRupiah(cashBreakdown.nonTunai)}`}
-            icon={Banknote}
-            tone="brand"
           />
           <StatCard
             label="Paket Terlaris"
             value={topPackage ? topPackage.name : 'Belum ada'}
             hint={
               topPackage
-                ? `${topPackage.sessions} transaksi · ${formatRupiah(topPackage.sales)}`
+                ? `${topPackage.payments} pembayaran · ${formatRupiah(topPackage.sales)}`
                 : 'Belum ada transaksi pada periode ini'
             }
             icon={Award}
@@ -194,9 +159,7 @@ export default function DashboardPage() {
             <Card
               title={period === 'today' ? 'Grafik Penjualan Hari Ini' : 'Grafik Penjualan'}
               description={
-                isSingleDay
-                  ? 'Nilai transaksi selesai per jam operasional'
-                  : 'Nilai transaksi selesai per tanggal pada periode terpilih'
+                isSingleDay ? 'Uang masuk per jam' : 'Uang masuk per tanggal'
               }
               actions={<Badge tone="brand">{REPORT_PERIODS[period]}</Badge>}
             >
@@ -209,18 +172,11 @@ export default function DashboardPage() {
           </div>
 
           <div className="lg:col-span-5 xl:col-span-4">
-            <Card
-              title="Penerimaan per Metode"
-              description="Bersih setelah pengembalian"
-            >
+            <Card title="Penjualan per Metode">
               {loading ? (
                 <div className="h-64 animate-pulse rounded-2xl bg-slate-100" />
               ) : (
-                <CashMethodChart
-                  rows={cashRows}
-                  netCash={dashboard?.net_cash ?? 0}
-                  cancelledNetCash={dashboard?.cancelled_net_cash ?? 0}
-                />
+                <SalesMethodChart methods={dashboard?.methods ?? []} total={dashboard?.sales ?? 0} />
               )}
             </Card>
           </div>
@@ -229,7 +185,7 @@ export default function DashboardPage() {
         {/* Urutan Performa Paket */}
         <Card
           title={period === 'today' ? 'Paket Terlaris Hari Ini' : 'Urutan Performa Paket'}
-          description="Urutan berdasarkan penjualan (transaksi lunas)"
+          description="Urutan berdasarkan penjualan (uang masuk)"
         >
           {loading ? (
             <div className="space-y-3">
@@ -244,7 +200,7 @@ export default function DashboardPage() {
           ) : (
             <div className="divide-y divide-slate-100">
               {dashboard.packages.map((pkg, index) => {
-                const sessionsCount = Number(pkg.sessions ?? 0)
+                const sessionsCount = Number(pkg.payments ?? 0)
                 const rank = index + 1
                 const badgeTone =
                   sessionsCount === 0
@@ -256,7 +212,7 @@ export default function DashboardPage() {
                         : 'amber'
                 const badgeLabel =
                   sessionsCount === 0
-                    ? 'Belum ada sesi'
+                    ? 'Belum ada'
                     : rank === 1
                       ? 'Terlaris'
                       : rank === 2
@@ -275,7 +231,7 @@ export default function DashboardPage() {
                       <div className="min-w-0">
                         <p className="truncate font-bold text-slate-800">{pkg.name}</p>
                         <p className="text-xs text-slate-500">
-                          {sessionsCount} Transaksi
+                          {sessionsCount} Pembayaran
                         </p>
                       </div>
                     </div>

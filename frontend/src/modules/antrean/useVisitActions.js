@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { VISIT_ACTIONS } from '@/shared/utils/constants'
 import { runVisitAction } from './api'
 import { queueLabel } from './queue'
 
@@ -9,7 +8,6 @@ const nameOf = (visit) => {
 }
 
 const SUCCESS = {
-  CONFIRM: (visit) => `${visit.customer_name} sudah datang dan masuk antrean.`,
   CALL: (visit) => `${nameOf(visit)} dipanggil.`,
   START: (visit) => `Sesi foto ${nameOf(visit)} dimulai.`,
   SKIP: (visit) => `${nameOf(visit)} dilewati.`,
@@ -18,17 +16,11 @@ const SUCCESS = {
   FINISH: (visit) => `Sesi ${nameOf(visit)} selesai.`,
 }
 
-// Isi dialog alasan (backend: REASON_REQUIRED / OUT_OF_ORDER_REASON). Teks dibuat singkat.
+// Isi dialog alasan (backend: REASON_REQUIRED). Teks dibuat singkat.
+// Memanggil di luar urutan tidak perlu alasan: siapa yang dipanggil diputuskan Admin.
 function reasonDialog(visit, action) {
   const name = nameOf(visit)
   const configs = {
-    CALL: {
-      title: `Panggil ${name}`,
-      description: 'Bukan urutan berikutnya.',
-      confirmLabel: 'Panggil',
-      variant: 'warning',
-      placeholder: 'Mis. urutan sebelumnya belum ada',
-    },
     SKIP: {
       title: `Lewati ${name}`,
       description: null,
@@ -45,7 +37,7 @@ function reasonDialog(visit, action) {
     },
     CANCEL: {
       title: `Batalkan ${name}`,
-      description: 'Uang yang sudah dibayar tidak dikembalikan.',
+      description: visit.status === 'RESERVASI' ? 'DP/pembayaran tidak dikembalikan.' : 'Uang yang sudah dibayar tidak dikembalikan.',
       confirmLabel: 'Batalkan',
       variant: 'danger',
       placeholder: 'Mis. pelanggan tidak jadi',
@@ -80,33 +72,24 @@ export function useVisitActions(reload) {
   const [notice, setNotice] = useState(null) // { variant, message, kasirVisitId?, requestId? }
   const [dialog, setDialog] = useState(null)
 
-  async function run(visit, action, { reason, priority } = {}) {
+  async function run(visit, action, { reason } = {}) {
     setBusyId(visit.id)
     setNotice(null)
     try {
-      await runVisitAction(visit.id, {
-        version: visit.version,
-        action,
-        ...(reason ? { reason } : {}),
-        ...(priority !== undefined ? { priority } : {}),
-      })
+      await runVisitAction(visit.id, { version: visit.version, action, ...(reason ? { reason } : {}) })
       setDialog(null)
       setNotice({ variant: 'success', message: SUCCESS[action](visit) })
       window.dispatchEvent(new Event(QUEUE_CHANGED_EVENT))
     } catch (error) {
-      if (error?.code === 'OUT_OF_ORDER_REASON' && !reason) {
-        setDialog(reasonDialog(visit, VISIT_ACTIONS.CALL))
-      } else {
-        setDialog(null)
-        setNotice(errorNotice(error, visit))
-      }
+      setDialog(null)
+      setNotice(errorNotice(error, visit))
     } finally {
       setBusyId(null)
       reload()
     }
   }
 
-  // Buka dialog alasan (Lewati, Kembalikan, Batalkan, Panggil di luar urutan).
+  // Buka dialog alasan (Lewati, Kembalikan, Batalkan).
   function ask(visit, action) {
     setNotice(null)
     setDialog(reasonDialog(visit, action))

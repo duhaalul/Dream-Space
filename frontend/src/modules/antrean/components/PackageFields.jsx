@@ -1,6 +1,10 @@
 import { Input, Select } from '@/shared/components/ui'
 import { activeBackgrounds, activePackages, backgroundLabel, packageLabel } from '../visitForm'
 
+// Kolom 3 lajur Paket | Latar | Jumlah Orang. Baris lain yang ingin sejajar memakai kelas yang sama
+// (mis. form Reservasi: Nama di lajur Paket, No. WA selebar Latar + Jumlah Orang dengan sm:col-span-2).
+export const PACKAGE_GRID = 'grid gap-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)]'
+
 // Kolom Pilihan Paket, Latar, dan Jumlah Orang (sejajar 3 kolom; di HP bertumpuk).
 // Info kapasitas/durasi/urutan ditampilkan terpisah (kasir/components/PackageSummary).
 // Dipakai form datang langsung (wajib) dan reservasi (optional: paket boleh menyusul).
@@ -31,10 +35,10 @@ export default function PackageFields({ catalog, value, onChange, errors = {}, o
   else if (backgrounds.length === 0) backgroundPlaceholder = 'Tanpa pilihan latar'
 
   return (
-    <div className="grid gap-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+    <div className={PACKAGE_GRID}>
       <Select
         label={`Pilihan Paket${star}`}
-        placeholder={optional ? 'Belum dipilih (bisa menyusul)' : 'Pilih paket'}
+        placeholder={optional ? 'Belum dipilih' : 'Pilih paket'}
         options={packages.map((item) => ({ value: String(item.id), label: packageLabel(item) }))}
         value={value.package_id}
         onChange={(event) => changePackage(event.target.value)}

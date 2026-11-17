@@ -3,11 +3,12 @@ import { Button } from '@/shared/components/ui'
 import { VISIT_ACTIONS } from '@/shared/utils/constants'
 import { todayWib } from '@/shared/utils/format'
 
-// Tombol tindakan Admin sesuai status (semua berikon). Tagihan sudah lunas saat mendaftar,
+// Tombol tindakan Admin sesuai status (semua berikon). Tagihan sudah lunas saat masuk antrean,
 // jadi tidak ada tombol kasir: sesi foto cukup diakhiri dengan "Selesai".
-// Reservasi ditunda → tidak ada tombol untuk status Reservasi.
-// call: { isFirst, blocked } khusus status Menunggu (blocked = alasan Panggil nonaktif).
-export default function VisitActionButtons({ visit, actions, call = { isFirst: true, blocked: null } }) {
+// Reservasi yang belum datang punya tombol sendiri (bagian Reservasi: Sudah Datang, Batalkan).
+// call: { blocked } khusus status Menunggu (blocked = alasan Panggil nonaktif).
+// Siapa pun di Menunggu boleh dipanggil tanpa alasan: urutan hanya panduan, keputusan di Admin.
+export default function VisitActionButtons({ visit, actions, call = { blocked: null } }) {
   const anyBusy = actions.busyId !== null
   const loading = actions.busyId === visit.id
   const isToday = visit.service_date === todayWib()
@@ -30,8 +31,7 @@ export default function VisitActionButtons({ visit, actions, call = { isFirst: t
             loading={loading}
             disabled={anyBusy || !!call.blocked}
             title={call.blocked ?? undefined}
-            // Urutan pertama langsung dipanggil; selain itu wajib alasan (di luar urutan).
-            onClick={() => (call.isFirst ? actions.run(visit, VISIT_ACTIONS.CALL) : actions.ask(visit, VISIT_ACTIONS.CALL))}
+            onClick={() => actions.run(visit, VISIT_ACTIONS.CALL)}
           >
             {!loading && <Megaphone aria-hidden="true" className="h-3.5 w-3.5" />} Panggil
           </Button>

@@ -11,6 +11,7 @@ import {
   Input,
   Modal,
   PageHeader,
+  PasswordInput,
   SegmentedControl,
   Select,
   StatCard,
@@ -71,10 +72,11 @@ export default function ComponentsPreviewPage() {
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Input, Select, SegmentedControl">
+        <Card title="Input, PasswordInput, Select, SegmentedControl">
           <div className="space-y-4">
-            <Input label="Uang Diterima (Rp)" placeholder="Rp150.000" hint="Isi uang yang diserahkan pelanggan." />
+            <Input label="Uang Diterima (Rp)" type="number" placeholder="150000" hint="Hanya angka: e + - . , tidak bisa diketik." />
             <Input label="Nama panggilan" defaultValue="" error="Nama panggilan wajib diisi." />
+            <PasswordInput label="Kata sandi" defaultValue="contoh-sandi" />
             <Select label="Paket" placeholder="Pilih paket" defaultValue="" options={[{ value: 1, label: 'Reguler Studio (RG)' }]} />
             <SegmentedControl label="Metode bayar" tone="brand" options={METHOD_OPTIONS} value={method} onChange={setMethod} />
           </div>
