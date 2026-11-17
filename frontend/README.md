@@ -124,7 +124,6 @@ Contoh tampilan semua komponen ada di `/dev/komponen`.
 | `Alert` | `variant` (`error`/`success`/`warning`/`info`), `requestId?` | `<Alert variant="error">{error.message}</Alert>` |
 | `Modal` | `open`, `title`, `onClose`, `footer?` | Dialog alasan, detail kunjungan |
 | `BrandLogo` | `size` (`sm`/`md`/`lg`) | Logo dalam kotak biru |
-| `TodoCard` | `title`, `items` | Penanda sementara; hapus setelah halaman jadi |
 
 Varian `Button` sesuai desain:
 
@@ -137,7 +136,7 @@ Varian `Button` sesuai desain:
 | `soft` | biru muda | Kembalikan ke Antrean |
 | `soft-success` | hijau muda | Unduh Excel |
 | `danger` | merah muda | Batalkan, Unduh PDF |
-| `neutral` | abu-abu | Lewati |
+| `neutral` | abu-abu | Kembali ke Antrean |
 | `ghost` | transparan | Tombol ikon |
 
 Fungsi bantu di `@/shared/utils/`: `formatRupiah(150000)` → `Rp150.000`, `formatDate`, `formatTime`, `formatDateTime`, `todayWib()`, `newRequestId()`, `saveBlob()`, `openBlob()`, serta konstanta status/metode/peran di `constants.js`.
@@ -217,7 +216,6 @@ Bila desain memuat bagian yang endpoint-nya tidak ada di `docs/API.md` (branch b
    - error `STALE_VERSION`: muat ulang data, jangan kirim ulang otomatis.
 6. **Hak akses di frontend hanya untuk tampilan.** Backend tetap memeriksa setiap permintaan (NFR-01).
 7. **Halaman Owner harus nyaman di HP** (NFR-03): cek di DevTools dengan lebar 390px, tanpa scroll ke samping.
-8. Halaman yang belum selesai memakai `<TodoCard>`. Hapus setelah halamannya dibuat.
 
 ## Login dan sesi
 

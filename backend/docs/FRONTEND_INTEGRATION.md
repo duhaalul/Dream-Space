@@ -1,5 +1,7 @@
 # Integrasi frontend - 15 November 2026
 
+> **Catatan sejarah.** Dokumen ini merekam pemeriksaan integrasi 15 Nov 2026 (14 tes integrasi, frontend antrean/kasir saat itu masih `TodoCard`). Sejak itu banyak yang berubah: semua halaman sudah jadi, ada reservasi, laporan buku kas, dan 28 tes integrasi. Kondisi terkini ada di [API.md](API.md), README backend, dan README tiap modul frontend.
+
 Penambahan ke `main` hanya mencakup folder `backend/`. File frontend dan README root tidak diubah. Branch frontend anggota tim tidak digabungkan dalam pekerjaan backend ini.
 
 ## Sumber yang diperiksa

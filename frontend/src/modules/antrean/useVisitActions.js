@@ -9,8 +9,8 @@ const nameOf = (visit) => {
 
 const SUCCESS = {
   CALL: (visit) => `${nameOf(visit)} dipanggil.`,
+  UNCALL: (visit) => `${nameOf(visit)} kembali ke antrean (urutan semula).`,
   START: (visit) => `Sesi foto ${nameOf(visit)} dimulai.`,
-  SKIP: (visit) => `${nameOf(visit)} dilewati.`,
   RETURN: (visit) => `${visit.customer_name} kembali ke antrean paling belakang.`,
   CANCEL: (visit) => `${nameOf(visit)} dibatalkan.`,
   FINISH: (visit) => `Sesi ${nameOf(visit)} selesai.`,
@@ -21,13 +21,6 @@ const SUCCESS = {
 function reasonDialog(visit, action) {
   const name = nameOf(visit)
   const configs = {
-    SKIP: {
-      title: `Lewati ${name}`,
-      description: null,
-      confirmLabel: 'Lewati',
-      variant: 'neutral',
-      placeholder: 'Mis. tidak ada di studio',
-    },
     RETURN: {
       title: `Kembalikan ${name}`,
       description: 'Masuk antrean paling belakang.',
@@ -89,7 +82,7 @@ export function useVisitActions(reload) {
     }
   }
 
-  // Buka dialog alasan (Lewati, Kembalikan, Batalkan).
+  // Buka dialog alasan (Kembalikan untuk data lama Dilewati, Batalkan).
   function ask(visit, action) {
     setNotice(null)
     setDialog(reasonDialog(visit, action))

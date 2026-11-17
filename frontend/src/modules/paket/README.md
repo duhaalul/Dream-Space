@@ -8,9 +8,6 @@ FR-02, FR-03 · UC-03, UC-04, UC-05, UC-06.
 
 ## Penanggung jawab
 **Larisa**, kecuali `components/RoomAvailabilityToggle.jsx` (dibuat dan dipegang Ihsan, sudah selesai).
-
-> **Prioritas (15 Nov):** kerjakan form paket lebih dulu, karena data paket dibutuhkan untuk menguji Antrean dan Kasir.
-
 ## Halaman & komponen
 | File | Layar di Figma | Peran | Status |
 |---|---|---|---|
@@ -31,13 +28,13 @@ FR-02, FR-03 · UC-03, UC-04, UC-05, UC-06.
 |---|---|---|
 | `getPackages()` | `GET /packages` | Daftar paket → `{ packages, backgrounds, allowed_addons }` |
 | `getAddons()` | `GET /addons` | Daftar tambahan layanan |
-| `createPackage(data)` / `updatePackage(id, data)` | `POST /packages` / `PUT /packages/:id` | Simpan paket (PUT = body lengkap) |
-| `createBackground(packageId, data)` / `updateBackground(id, data)` | `POST /packages/:id/backgrounds` / `PUT /backgrounds/:id` | Latar: `{ name, max_persons, is_active }` |
-| `setPackageAddons(packageId, addonIds)` | `PUT /packages/:id/addons` | Centang tambahan yang tersedia (mengganti seluruh daftar) |
+| `updatePackage(id, data)` | `PUT /packages/:id` | Tombol Aktifkan/Nonaktifkan di kartu (body lengkap); 409 `PACKAGE_IN_USE` bila masih dipakai |
 | `createAddon(data)` / `updateAddon(id, data)` | `POST /addons` / `PUT /addons/:id` | Tambahan: `{ name, price, unit, extra_minutes, is_active }` |
 | `deleteAddon(id)` | `DELETE /addons/:id` | Hapus tambahan → `{ id, archived }`; 409 `ADDON_IN_USE` bila masih dipakai paket |
 | `setPackageAvailability(id, isOpen, reason)` | `PATCH /packages/:id/availability` | Tutup/buka ruangan (Admin) |
 | `createPackageSetup(data)` / `updatePackageSetup(id, data)` | `POST /packages/setup` / `PUT /packages/:id/setup` | Pop-up: `{ package, backgrounds: [{ id?, name, max_persons, is_active }], addon_ids }` disimpan sekaligus (satu transaksi) |
+
+Fungsi simpan per bagian (`createPackage`, `createBackground`, `updateBackground`, `setPackageAddons`) **dihapus** 17 Nov 2026 karena sudah digantikan simpan sekaligus. Endpoint backend-nya tetap ada.
 
 Contoh body paket:
 ```json

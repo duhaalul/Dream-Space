@@ -159,5 +159,3 @@ export function successInfo(detail) {
     transactionId: detail.transaction.id,
   }
 }
-
-export const rupiah = formatRupiah

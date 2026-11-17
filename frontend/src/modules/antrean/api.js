@@ -16,5 +16,5 @@ export const getQueueRooms = () => api.get('/queue/rooms')
 export const updateVisitSelection = (id, data) => api.put(`/visits/${id}/selection`, data)
 
 // Admin. data: { version, action, reason? }
-// action: CALL | START | SKIP | RETURN | CANCEL | FINISH (lihat VISIT_ACTIONS)
+// action: CALL | UNCALL (Kembali ke Antrean) | START | RETURN (data lama Dilewati) | CANCEL | FINISH (lihat VISIT_ACTIONS)
 export const runVisitAction = (id, data) => api.post(`/visits/${id}/actions`, data)
