@@ -231,6 +231,28 @@ test('panggil di luar urutan tanpa alasan, ruangan ditutup, lewati lalu kembali'
   second = await action(second,'SKIP'); second = await action(second,'RETURN'); assert.equal(second.visit.status,'MENUNGGU');
   first = await action(first,'CALL'); await action(first,'CANCEL'); await action(second,'CANCEL');
 });
+test('Kembali ke Antrean (UNCALL): salah panggil kembali ke urutan semula, tanpa alasan', async () => {
+  const timing = z.object({ visit: z.object({ status: z.string(),called_at: z.string().nullable(),queue_entered_at: z.string().nullable() }) });
+  const first = await register(); let second = await register();
+  const raw = async (v: View) => timing.parse((await request(app).get(`/api/visits/${v.visit.id}`).set(auth()).expect(200)).body).visit;
+  const enteredBefore = (await raw(second)).queue_entered_at;
+  assert.ok(enteredBefore);
+  // Belum dipanggil → tidak bisa dikembalikan.
+  const notCalled = await request(app).post(`/api/visits/${second.visit.id}/actions`).set(auth()).send({ version: second.visit.version,action: 'UNCALL' }).expect(409);
+  assert.equal(z.object({ error: z.object({ code: z.string() }) }).parse(notCalled.body).error.code,'INVALID_TRANSITION');
+  second = await action(second,'CALL');
+  // Tanpa alasan (tombol "Kembali ke Antrean").
+  const back = (await request(app).post(`/api/visits/${second.visit.id}/actions`).set(auth()).send({ version: second.visit.version,action: 'UNCALL' }).expect(200)).body;
+  second = viewSchema.parse(back);
+  const t = timing.parse(back).visit;
+  assert.equal(t.status,'MENUNGGU'); assert.equal(t.called_at,null); assert.equal(t.queue_entered_at,enteredBefore);
+  // Urutan Menunggu tetap: first lalu second. Ruangan kosong → first bisa dipanggil.
+  const order = z.array(z.object({ id: numeric })).parse((await request(app).get(`/api/visits?date=${today()}`).set(auth()).expect(200)).body)
+    .map(v => v.id).filter(id => id === first.visit.id || id === second.visit.id);
+  assert.deepEqual(order,[first.visit.id,second.visit.id]);
+  const called = await action(first,'CALL');
+  await action(called,'CANCEL'); await action(second,'CANCEL');
+});
 test('paket diubah tidak merusak snapshot kunjungan lama; paket dipakai tak bisa dinonaktifkan; tagihan nol bisa selesai', async () => {
   const free = z.object({ id: numeric }).parse((await request(app).post('/api/packages').set(auth(owner))
     .send({ name: 'Uji nol',queue_code: 'FREE',price_type: 'PER_SESI',price: 0 }).expect(201)).body).id;

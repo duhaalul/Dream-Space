@@ -13,8 +13,7 @@ type JsonCall = (...args: Json[]) => Promise<Json>;
 interface Frontend {
   client: { setAuthToken(token: string | null): void; setUnauthorizedHandler(callback: (() => void) | null): void };
   akun: { login: JsonCall; getMe: JsonCall; changePassword: JsonCall; updateProfile: JsonCall; logout: JsonCall };
-  paket: { createPackage: JsonCall; updatePackage: JsonCall; getPackages: JsonCall; getAddons: JsonCall;
-    createAddon: JsonCall; createBackground: JsonCall; setPackageAddons: JsonCall; setPackageAvailability: JsonCall;
+  paket: { updatePackage: JsonCall; getPackages: JsonCall; getAddons: JsonCall; createAddon: JsonCall; setPackageAvailability: JsonCall;
     createPackageSetup: JsonCall; updatePackageSetup: JsonCall; deleteAddon: JsonCall };
   antrean: { getVisit: JsonCall; runVisitAction: JsonCall; getQueueRooms: JsonCall };
   kasir: { registerWalkIn: JsonCall; registerReservation: JsonCall; checkInReservation: JsonCall; updateReservation: JsonCall; getReservationSlots: JsonCall;
@@ -66,21 +65,22 @@ export async function verifyFrontendContract(): Promise<void> {
     const payload = { name: 'Paket Integrasi',queue_code: 'INT',price_type: 'PER_KELOMPOK',price: 110000,
       included_persons: 2,extra_person_price: 30000,min_persons: 1,max_persons: 15,duration_minutes: 20,
       description: 'Pengujian kontrak frontend',is_active: true };
+    // Kelola Paket memakai simpan sekaligus (createPackageSetup): paket + latar + tambahan dalam satu panggilan.
     try {
-      await fe.paket.createPackage({ ...payload,min_persons: 10,max_persons: 2 });
+      await fe.paket.createPackageSetup({ package: { ...payload,min_persons: 10,max_persons: 2 } });
       assert.fail('Batas orang yang terbalik harus ditolak');
     } catch (error) {
       const result = z.object({ code: z.literal('VALIDATION_ERROR'),details: z.array(z.object({ path: z.array(z.union([z.string(),z.number()])) })) }).parse(error);
-      assert.ok(result.details.some(issue => issue.path[0] === 'max_persons'));
+      assert.ok(result.details.some(issue => issue.path[0] === 'package' && issue.path[1] === 'max_persons'));
     }
-    const pkg = entitySchema.parse(await fe.paket.createPackage(payload));
-    const bg = entitySchema.parse(await fe.paket.createBackground(pkg.id,{ name: 'Putih',max_persons: 5,is_active: true }));
     const addon = entitySchema.parse(await fe.paket.createAddon({ name: 'Tambah waktu',price: 20000,unit: '5 menit',extra_minutes: 5,is_active: true }));
-    await fe.paket.setPackageAddons(pkg.id,[addon.id]);
-    const catalog = z.object({ packages: z.array(entitySchema),backgrounds: z.array(entitySchema),
+    const pkg = entitySchema.parse(await fe.paket.createPackageSetup({ package: payload,
+      backgrounds: [{ name: 'Putih',max_persons: 5,is_active: true }],addon_ids: [addon.id] }));
+    const catalog = z.object({ packages: z.array(entitySchema),backgrounds: z.array(z.object({ id: z.number(),package_id: z.number(),name: z.string() })),
       allowed_addons: z.array(z.object({ package_id: z.number(),addon_id: z.number() })) }).parse(await fe.paket.getPackages());
+    const bg = catalog.backgrounds.find(b => b.package_id === pkg.id && b.name === 'Putih');
+    assert.ok(bg);
     assert.ok(catalog.packages.some(p => p.id === pkg.id));
-    assert.ok(catalog.backgrounds.some(p => p.id === bg.id));
     assert.ok(catalog.allowed_addons.some(p => p.package_id === pkg.id && p.addon_id === addon.id));
     assert.ok(z.array(entitySchema).parse(await fe.paket.getAddons()).some(a => a.id === addon.id));
     // Hapus tambahan (DELETE lewat klien frontend): belum pernah dipakai → hapus permanen.

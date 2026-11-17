@@ -613,7 +613,8 @@ operations.put('/visits/:id/selection', async (req, res) => {
 operations.post('/visits/:id/actions', async (req, res) => {
   const visitId = id.parse(Number(req.params['id']));
   // Reservasi masuk antrean lewat POST /visits/:id/check-in (aksi CONFIRM lama dihapus).
-  const input = z.strictObject({ version: versionSchema, action: z.enum(['CALL','START','SKIP','RETURN','CANCEL','FINISH']),
+  // UNCALL = "Kembali ke Antrean" (salah panggil). SKIP/RETURN tidak dipakai tampilan lagi (data lama berstatus Dilewati).
+  const input = z.strictObject({ version: versionSchema, action: z.enum(['CALL','UNCALL','START','SKIP','RETURN','CANCEL','FINISH']),
     reason: reason.optional() }).parse(req.body);
   res.json(await transaction(async db => {
     const visit = await one<Visit>(db, 'SELECT * FROM visits WHERE id=? FOR UPDATE', [visitId]);
@@ -629,6 +630,10 @@ operations.post('/visits/:id/actions', async (req, res) => {
       ensure(!(await rows(db, "SELECT id FROM visits WHERE package_id=? AND status IN ('DIPANGGIL','SEDANG_DILAYANI')", [visit.package_id])).length,
         'ROOM_BUSY', 'Paket masih memiliki pelanggan dipanggil/sedang dilayani');
       await run(db, 'UPDATE visits SET called_at=NOW(3) WHERE id=?', [visitId]); next = 'DIPANGGIL';
+    } else if (input.action === 'UNCALL') {
+      // Kembali ke Antrean (mis. salah panggil): urutan semula karena queue_entered_at tidak diubah. Tanpa alasan.
+      ensure(visit.status === 'DIPANGGIL', 'INVALID_TRANSITION', 'Hanya pelanggan dipanggil yang dapat dikembalikan ke antrean');
+      await run(db, 'UPDATE visits SET called_at=NULL WHERE id=?', [visitId]); next = 'MENUNGGU';
     } else if (input.action === 'START') {
       ensure(visit.status === 'DIPANGGIL', 'INVALID_TRANSITION', 'Panggil pelanggan sebelum mulai sesi');
       const b = await balance(db,sale.id);
