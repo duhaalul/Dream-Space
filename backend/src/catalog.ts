@@ -58,8 +58,23 @@ async function insertPackage(db: Db, actor: Actor, p: PackageInput): Promise<num
   await audit(db, actor, 'packages', result.insertId, 'CREATE', null, p);
   return result.insertId;
 }
+// Urutan & label status kunjungan yang membuat paket "masih dipakai".
+const IN_USE_LABELS: [string, string][] = [['SEDANG_DILAYANI','sedang foto'],['DIPANGGIL','dipanggil'],['MENUNGGU','menunggu'],
+  ['DILEWATI','dilewati'],['RESERVASI','reservasi belum datang']];
 async function updatePackageRow(db: Db, actor: Actor, packageId: number, p: PackageInput): Promise<void> {
   const old = await one<Record<string, string | number | null>>(db, 'SELECT * FROM packages WHERE id=? FOR UPDATE', [packageId]);
+  // Paket nonaktif disembunyikan dari papan Antrean & Pendaftaran. Jadi paket yang masih punya antrean/sesi
+  // atau reservasi yang belum datang (tanggal berapa pun) tidak boleh dinonaktifkan: sesinya tidak bisa dijangkau lagi.
+  if (Number(old['is_active']) === 1 && !p.is_active) {
+    const used = await rows<{ status: string; count: number }>(db, `SELECT status,COUNT(*) AS count FROM visits WHERE package_id=?
+      AND status IN ('RESERVASI','MENUNGGU','DIPANGGIL','SEDANG_DILAYANI','DILEWATI') GROUP BY status`, [packageId]);
+    const parts = IN_USE_LABELS.flatMap(([status, label]) => {
+      const count = Number(used.find(u => u.status === status)?.count ?? 0);
+      return count ? [`${count} ${label}`] : [];
+    });
+    ensure(!parts.length, 'PACKAGE_IN_USE', `${String(old['name'])} masih dipakai: ${parts.join(', ')}. `
+      + 'Selesaikan sesi/antreannya dan batalkan atau pindahkan reservasinya dulu.');
+  }
   await run(db, `UPDATE packages SET name=?,queue_code=?,price_type=?,price=?,included_persons=?,extra_person_price=?,
     min_persons=?,max_persons=?,duration_minutes=?,description=?,is_active=?,updated_by=? WHERE id=?`,
   [p.name,p.queue_code,p.price_type,p.price,p.included_persons,p.extra_person_price,p.min_persons,p.max_persons,p.duration_minutes,p.description,p.is_active,actor.id,packageId]);

@@ -95,7 +95,12 @@ reports.get('/transactions/:id/receipt.pdf', async (req, res) => {
     return detail(db,sale.visit_id);
   });
   const { visit, transaction: sale } = result;
-  ensure(sale.paid_off_at !== null || visit.status === 'SELESAI', 'RECEIPT_NOT_READY', 'Nota tersedia setelah transaksi lunas');
+  // Nota hanya untuk sesi Selesai atau transaksi LUNAS PENUH: pernah lunas (paid_off_at) dan uang bersih menutup
+  // semua layanan aktif. paid_off_at saja tidak cukup: reservasi lunas yang naik paket menjadi belum lunas lagi,
+  // dan saat batal total ditimpa uang yang ditahan. Aturan yang sama dipakai Riwayat (frontend kasir/cashier.js fullyPaid).
+  const itemsTotal = result.items.filter(i => Number(i.is_active) === 1).reduce((sum,i) => sum+Number(i.amount),0);
+  const fullyPaid = sale.paid_off_at !== null && result.balance.net >= itemsTotal;
+  ensure(visit.status === 'SELESAI' || fullyPaid, 'RECEIPT_NOT_READY', 'Nota tersedia setelah transaksi lunas');
   const queue = queueLabel(visit);
   const rp = (value: number) => `Rp ${value.toLocaleString('id-ID')}`;
   const change = result.payments.reduce((sum,p) => sum+(p.change_amount ?? 0),0);

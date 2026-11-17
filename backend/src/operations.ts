@@ -119,7 +119,9 @@ async function refresh(db: Db, transactionId: number): Promise<void> {
     : sale.price_type_snapshot === null ? (b.net > 0 ? 'BELUM_LUNAS' : 'BELUM_DIBAYAR')
     : b.net > sale.total ? 'KELEBIHAN_BAYAR' : b.net === sale.total ? (sale.total === 0 ? 'TIDAK_ADA_TAGIHAN' : 'LUNAS')
     : b.net === 0 ? 'BELUM_DIBAYAR' : 'BELUM_LUNAS';
-  // paid_off_at: waktu transaksi pertama kali lunas (dasar laporan penjualan & nota). Transaksi batal tidak diisi.
+  // paid_off_at: waktu transaksi PERTAMA KALI lunas (jam "Lunas" di nota/Riwayat; laporan memakai payments.paid_at).
+  // Tidak dikosongkan bila total naik lagi (naik paket); cek lunas sekarang lewat payment_status atau uang ≥ rincian aktif.
+  // Transaksi batal tidak diisi.
   const settled = !sale.cancelled_at && sale.price_type_snapshot !== null && ['LUNAS','TIDAK_ADA_TAGIHAN'].includes(paymentStatus);
   await run(db, `UPDATE transactions SET payment_status=?,refund_status=?,
     paid_off_at=CASE WHEN ? AND paid_off_at IS NULL THEN NOW(3) ELSE paid_off_at END,version=version+1 WHERE id=?`,
@@ -276,11 +278,20 @@ operations.get('/visits', async (req, res) => {
   const from = q.from ?? q.date; const to = q.to ?? q.date;
   ensure(from <= to && new Date(to).getTime()-new Date(from).getTime() <= 366*86400_000,
     'INVALID_RANGE','Rentang tanggal tidak valid atau melebihi 367 hari',422);
-  const states = q.history === 'true' ? "('SELESAI','DIBATALKAN')" : "('RESERVASI','MENUNGGU','DIPANGGIL','SEDANG_DILAYANI','DILEWATI')";
+  const history = q.history === 'true';
+  const states = history ? "('SELESAI','DIBATALKAN')" : "('RESERVASI','MENUNGGU','DIPANGGIL','SEDANG_DILAYANI','DILEWATI')";
+  // Riwayat: reservasi yang dibatalkan SEBELUM datang (belum pernah dapat nomor antrean) dicatat pada tanggal
+  // pembatalannya, supaya terlihat di Riwayat hari itu (sama dengan hari DP-nya di Laporan). Lainnya: tanggal layanan.
+  const day = history
+    ? "(CASE WHEN v.status='DIBATALKAN' AND v.customer_type='RESERVASI' AND v.queue_number IS NULL AND t.cancelled_at IS NOT NULL THEN DATE(t.cancelled_at) ELSE v.service_date END)"
+    : 'v.service_date';
+  // paid = uang bersih yang sudah dibayar (pembayaran − refund); dipakai kartu Reservasi "Sisa Rp…".
   // Urutan = jam masuk antrean: datang langsung saat mendaftar, reservasi = jam reservasinya (diisi saat check-in),
   // reservasi yang belum datang memakai jam reservasi.
-  res.json(await read(db => rows(db, `SELECT v.*,t.id AS transaction_id,t.transaction_no,t.total,t.payment_status,t.version AS transaction_version
-    FROM visits v JOIN transactions t ON t.visit_id=v.id WHERE v.service_date BETWEEN ? AND ? AND v.status IN ${states}
+  res.json(await read(db => rows(db, `SELECT v.*,t.id AS transaction_id,t.transaction_no,t.total,t.payment_status,t.version AS transaction_version,
+      CAST((SELECT COALESCE(SUM(p.amount),0) FROM payments p WHERE p.transaction_id=t.id)
+        -(SELECT COALESCE(SUM(r.amount),0) FROM refunds r WHERE r.transaction_id=t.id) AS SIGNED) AS paid
+    FROM visits v JOIN transactions t ON t.visit_id=v.id WHERE ${day} BETWEEN ? AND ? AND v.status IN ${states}
     AND (v.customer_name LIKE ? OR t.transaction_no LIKE ?)
     ORDER BY COALESCE(v.queue_entered_at,v.appointment_at),v.id LIMIT 100 OFFSET ${100*(q.page-1)}`,
   [from,to,`%${q.search}%`,`%${q.search}%`])));
