@@ -6,7 +6,7 @@ import { Alert, Button } from '@/shared/components/ui'
 import { ROLES, VISIT_ACTIONS } from '@/shared/utils/constants'
 import { todayWib } from '@/shared/utils/format'
 import { backgroundNames, buildBoard, ticketFor, visitMeta } from '../queue'
-import { useQueueData, useReservations } from '../useQueueData'
+import { useOverdueReservations, useQueueData, useReservations } from '../useQueueData'
 import { useVisitActions } from '../useVisitActions'
 import { ActionFeedback, EmptyNote, QueueLoading, RefreshButton, Section } from './BoardParts'
 import CheckInModal from './CheckInModal'
@@ -27,9 +27,15 @@ export default function QueueBoard() {
   const { data, error, reload } = useQueueData()
   const [reservationDate, setReservationDate] = useState(todayWib)
   const reservations = useReservations(reservationDate)
+  const overdue = useOverdueReservations()
+  const [showOverdue, setShowOverdue] = useState(false)
+  const reloadReservations = () => {
+    reservations.reload()
+    overdue.reload()
+  }
   const reloadAll = () => {
     reload()
-    reservations.reload()
+    reloadReservations()
   }
   const actions = useVisitActions(reloadAll)
   const [detailId, setDetailId] = useState(null)
@@ -106,9 +112,15 @@ export default function QueueBoard() {
 
       <ReservationSection
         date={reservationDate}
-        onDateChange={setReservationDate}
+        onDateChange={(next) => {
+          setReservationDate(next)
+          setShowOverdue(false)
+        }}
         data={reservations.data}
         error={reservations.error}
+        overdue={overdue.data}
+        showOverdue={showOverdue}
+        onToggleOverdue={() => setShowOverdue((shown) => !shown)}
         packages={data.packages}
         isAdmin={isAdmin}
         busy={actions.busyId !== null}
@@ -143,7 +155,7 @@ export default function QueueBoard() {
           onClose={() => setEditingId(null)}
           onSaved={() => {
             setEditingId(null)
-            reservations.reload()
+            reloadReservations()
           }}
         />
       )}

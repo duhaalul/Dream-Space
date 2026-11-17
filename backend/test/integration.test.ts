@@ -231,17 +231,23 @@ test('panggil di luar urutan tanpa alasan, ruangan ditutup, lewati lalu kembali'
   second = await action(second,'SKIP'); second = await action(second,'RETURN'); assert.equal(second.visit.status,'MENUNGGU');
   first = await action(first,'CALL'); await action(first,'CANCEL'); await action(second,'CANCEL');
 });
-test('paket dinonaktifkan tidak merusak snapshot kunjungan lama; tagihan nol bisa selesai', async () => {
+test('paket diubah tidak merusak snapshot kunjungan lama; paket dipakai tak bisa dinonaktifkan; tagihan nol bisa selesai', async () => {
   const free = z.object({ id: numeric }).parse((await request(app).post('/api/packages').set(auth(owner))
     .send({ name: 'Uji nol',queue_code: 'FREE',price_type: 'PER_SESI',price: 0 }).expect(201)).body).id;
+  const changed = { name: 'Uji nol berubah',queue_code: 'FREE',price_type: 'PER_SESI',price: 99999 };
   let v = await register(free);
-  await request(app).put(`/api/packages/${free}`).set(auth(owner)).send({ name: 'Uji nol berubah',queue_code: 'FREE',
-    price_type: 'PER_SESI',price: 99999,is_active: false }).expect(200);
-  await request(app).post('/api/visits').set(auth()).send({ client_request_id: randomUUID(),customer_name: 'Baru',customer_type: 'WALK_IN',package_id: free,persons: 2 }).expect(422);
+  // Harga master berubah saat ada kunjungan → kunjungan lama tetap memakai snapshot (tagihan 0).
+  await request(app).put(`/api/packages/${free}`).set(auth(owner)).send(changed).expect(200);
+  // Masih ada antrean → tidak boleh dinonaktifkan (sesinya akan hilang dari papan Antrean).
+  const blocked = await request(app).put(`/api/packages/${free}`).set(auth(owner)).send({ ...changed,is_active: false }).expect(409);
+  assert.equal(z.object({ error: z.object({ code: z.string() }) }).parse(blocked.body).error.code,'PACKAGE_IN_USE');
   v = await action(await action(v,'CALL'),'START');
   v = viewSchema.parse((await request(app).post(`/api/visits/${v.visit.id}/finish`).set(auth()).send({ version: v.visit.version,
     transaction_version: v.transaction.version,persons: 2,addons: [] }).expect(200)).body);
   assert.equal(v.transaction.total,0); assert.equal(v.transaction.payment_status,'TIDAK_ADA_TAGIHAN');
+  // Sudah kosong → boleh dinonaktifkan; pendaftaran baru ke paket nonaktif ditolak.
+  await request(app).put(`/api/packages/${free}`).set(auth(owner)).send({ ...changed,is_active: false }).expect(200);
+  await request(app).post('/api/visits').set(auth()).send({ client_request_id: randomUUID(),customer_name: 'Baru',customer_type: 'WALK_IN',package_id: free,persons: 2 }).expect(422);
 });
 test('dua pembayaran berbeda tidak dapat melunasi saldo yang sama dua kali', async () => {
   let v = await register();
@@ -647,19 +653,31 @@ test('Ubah Reservasi: turun paket → refund (baris minus), naik paket → bayar
   const rowsA = z.object({ rows: z.array(z.object({ transaction_no: z.string(),method: z.string(),status: z.string(),amount: numeric })) })
     .parse((await request(app).get(`/api/reports/sales?${query}`).set(auth(owner)).expect(200)).body).rows.filter(r => r.transaction_no === trxA);
   assert.deepEqual(rowsA.map(r => [r.status,r.method,r.amount]),[['Lunas','QRIS',200000],['Refund','Transfer',-140000]]);
-  // Batal setelah lunas → tidak ada pengembalian.
+  // Batal setelah lunas → tidak ada pengembalian; nota tetap ada (uang menutup semua layanan).
   await action(a,'CANCEL');
   assert.equal((await dash()).refund.amount,afterDown.refund.amount);
+  const receipt = (v: View) => request(app).get(`/api/transactions/${v.transaction.id}/receipt.pdf`).set(auth());
+  await receipt(a).expect(200);
 
   // 2. Lunas Ekonomis Rp60.000 naik ke Reguler Rp200.000 → jadi belum lunas, selisih dibayar saat datang (+ tambahan saat datang).
   let b = viewSchema.parse((await reserve({ customer_name: 'Uji Naik',appointment_at: slot('18:00'),
     payment: reservationPayment('LUNAS',60000) }).expect(201)).body);
   b = viewSchema.parse((await edit(b,{ customer_name: 'Uji Naik',appointment_at: slot('18:00'),package_id: pkg }).expect(200)).body);
   assert.equal(b.transaction.total,200000); assert.equal(b.transaction.payment_status,'BELUM_LUNAS'); assert.equal(b.balance.due,140000);
+  // Pernah lunas (paid_off_at terisi) tapi sekarang kurang → nota tidak boleh dicetak sampai sisanya dibayar.
+  assert.equal(errorCode((await receipt(b).expect(409)).body),'RECEIPT_NOT_READY');
   assert.equal(errorCode((await checkIn(b).expect(422)).body),'PAYMENT_REQUIRED');
   const arrived = viewSchema.parse((await checkIn(b,{ addons: [{ addon_id: addon,qty: 1 }],
     payment: { client_request_id: randomUUID(),method: 'TUNAI',amount: 150000 } }).expect(200)).body);
   assert.equal(arrived.visit.status,'MENUNGGU'); assert.equal(arrived.transaction.total,210000); assert.equal(arrived.transaction.payment_status,'LUNAS');
+  await receipt(arrived).expect(200);
+  // Lunas → naik paket → batal: total ditimpa uang ditahan (status terbaca LUNAS), tapi uang tidak menutup layanan → tanpa nota.
+  let e = viewSchema.parse((await reserve({ customer_name: 'Uji Naik Batal',appointment_at: slot('15:00',tomorrow()),
+    payment: reservationPayment('LUNAS',60000) }).expect(201)).body);
+  e = viewSchema.parse((await edit(e,{ customer_name: 'Uji Naik Batal',appointment_at: slot('15:00',tomorrow()),package_id: pkg }).expect(200)).body);
+  e = await action(e,'CANCEL');
+  assert.equal(e.transaction.payment_status,'LUNAS'); assert.equal(e.transaction.total,60000);
+  assert.equal(errorCode((await receipt(e).expect(409)).body),'RECEIPT_NOT_READY');
 
   // 3. DP Rp100.000 (Reguler + cetak ×2): saat datang tambahan tidak boleh dikurangi; turun ke Ekonomis → kelebihan DP dikembalikan.
   let c = viewSchema.parse((await reserve({ customer_name: 'Uji DP Turun',appointment_at: slot('19:00'),package_id: pkg,
@@ -675,6 +693,43 @@ test('Ubah Reservasi: turun paket → refund (baris minus), naik paket → bayar
   // Sudah datang (masuk Menunggu) → tidak bisa diubah lagi.
   assert.equal(errorCode((await edit(arrived,{ customer_name: 'Uji Naik',appointment_at: slot('18:00') }).expect(409)).body),'INVALID_TRANSITION');
   for (const v of [arrived,c,d]) await action(await view(v.visit.id),'CANCEL');
+});
+test('Daftar kunjungan: paid (uang bersih); Riwayat: reservasi batal sebelum datang dicatat di tanggal batal', async () => {
+  const listSchema = z.array(z.object({ id: numeric,total: numeric,paid: numeric,status: z.string() }));
+  const list = async (query: string) => listSchema.parse((await request(app).get(`/api/visits?${query}`).set(auth()).expect(200)).body);
+  const v = viewSchema.parse((await reserve({ customer_name: 'Uji Paid Batal',appointment_at: slot('16:00',tomorrow()),
+    payment: reservationPayment('DP',15000) }).expect(201)).body);
+  const row = (await list(`date=${tomorrow()}`)).find(r => r.id === v.visit.id);
+  assert.equal(row?.paid,15000); assert.equal(row?.total,60000); // kartu Reservasi: Sisa Rp45.000
+  await action(v,'CANCEL');
+  // Dibatalkan hari ini sebelum datang → Riwayat hari ini, bukan Riwayat tanggal reservasinya (besok).
+  assert.ok((await list(`date=${today()}&history=true`)).some(r => r.id === v.visit.id));
+  assert.ok(!(await list(`date=${tomorrow()}&history=true`)).some(r => r.id === v.visit.id));
+  // Kunjungan biasa tetap di tanggal layanannya.
+  const walk = await action(await register(cheap),'CANCEL');
+  assert.ok((await list(`date=${today()}&history=true`)).some(r => r.id === walk.visit.id && r.paid === walk.balance.net));
+});
+test('Paket yang masih dipakai tidak bisa dinonaktifkan (PACKAGE_IN_USE)', async () => {
+  const base = { name: 'Paket Dipakai',queue_code: 'PD',price_type: 'PER_SESI',price: 50000,max_persons: 6,duration_minutes: 15 };
+  const created = z.object({ id: numeric }).parse((await request(app).post('/api/packages/setup').set(auth(owner)).send({ package: base }).expect(201)).body).id;
+  const deactivate = () => request(app).put(`/api/packages/${created}`).set(auth(owner)).send({ ...base,is_active: false });
+  const errorOf = (body: unknown) => z.object({ error: z.object({ code: z.string(),message: z.string() }) }).parse(body).error;
+  // Reservasi yang belum datang (besok) → ditolak, dengan pesan berisi jumlahnya.
+  const r = viewSchema.parse((await reserve({ customer_name: 'Uji Paket Dipakai',appointment_at: slot('14:00',tomorrow()),package_id: created,
+    payment: reservationPayment('DP',10000) }).expect(201)).body);
+  let error = errorOf((await deactivate().expect(409)).body);
+  assert.equal(error.code,'PACKAGE_IN_USE'); assert.match(error.message,/^Paket Dipakai masih dipakai: 1 reservasi belum datang\./);
+  // Lewat pop-up Ubah Paket (/setup) juga ditolak.
+  assert.equal(errorOf((await request(app).put(`/api/packages/${created}/setup`).set(auth(owner))
+    .send({ package: { ...base,is_active: false } }).expect(409)).body).code,'PACKAGE_IN_USE');
+  await action(r,'CANCEL');
+  // Datang langsung yang menunggu → ditolak.
+  const waiting = await register(created);
+  error = errorOf((await deactivate().expect(409)).body); assert.match(error.message,/1 menunggu/);
+  await action(waiting,'CANCEL');
+  // Sudah kosong (yang batal tidak dihitung) → boleh dinonaktifkan dan diaktifkan lagi.
+  await deactivate().expect(200);
+  await request(app).put(`/api/packages/${created}`).set(auth(owner)).send({ ...base,is_active: true }).expect(200);
 });
 test('reset password mencabut semua sesi, idle 30 menit ditolak', async () => {
   const second = await login('admin',permanent);

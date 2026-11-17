@@ -122,6 +122,19 @@ export function itemLabel(item) {
   return `${item.description} ×${item.qty}`
 }
 
+// Harga semua layanan (rincian aktif). Untuk kunjungan batal, transaction.total sudah diganti uang yang ditahan,
+// jadi total layanan diambil dari rincian.
+export function itemsTotal(detail) {
+  return activeItems(detail).reduce((sum, item) => sum + Number(item.amount), 0)
+}
+
+// Lunas penuh = pernah lunas (paid_off_at) DAN uang bersih menutup semua layanan.
+// Sama dengan syarat nota di backend (reports.ts). paid_off_at saja tidak cukup: reservasi lunas yang naik paket
+// jadi belum lunas lagi, dan saat batal total ditimpa uang yang ditahan.
+export function fullyPaid(detail) {
+  return Boolean(detail.transaction.paid_off_at) && Number(detail.balance.net) >= itemsTotal(detail)
+}
+
 // Kembalian tunai tersimpan (jumlah dari semua pembayaran).
 export function totalChange(detail) {
   return detail.payments.reduce((sum, payment) => sum + Number(payment.change_amount ?? 0), 0)

@@ -3,13 +3,20 @@ import { queueLabel } from '@/modules/antrean/queue'
 import { Badge, Card } from '@/shared/components/ui'
 import { FIELD_CLASS } from '@/shared/components/ui/fieldClass'
 import { VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from '@/shared/utils/constants'
-import { formatRupiah, formatTime } from '@/shared/utils/format'
+import { formatRupiah, formatTime, parseBackendDate } from '@/shared/utils/format'
 
-// "Paket · 3 org · 10.25" (selesai) / "Paket · 10.25" (batal)
+const shortDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' })
+
+// "Paket · 3 org · 10.25" (selesai) / "Paket · 10.25" (batal).
+// Reservasi yang batal sebelum datang (tampil di tanggal batalnya): "Paket · Jadwal 25 Nov 14.00".
 function meta(row, pkg) {
   const parts = [pkg?.name ?? '-']
   if (row.status === 'SELESAI' && row.persons) parts.push(`${row.persons} org`)
-  parts.push(formatTime(row.finished_at ?? row.updated_at))
+  if (row.customer_type === 'RESERVASI' && row.queue_number === null && row.appointment_at) {
+    parts.push(`Jadwal ${shortDate.format(parseBackendDate(row.appointment_at))} ${formatTime(row.appointment_at)}`)
+  } else {
+    parts.push(formatTime(row.finished_at ?? row.updated_at))
+  }
   return parts.join(' · ')
 }
 
@@ -43,18 +50,20 @@ export default function HistoryList({ rows, packages, search, onSearch, onOpen, 
         <ul className="divide-y divide-slate-100">
           {shown.map((row) => (
             <li key={row.id}>
+              {/* Lebar kolom Nominal & Status tetap supaya angka rata kanan di satu garis dan badge sejajar,
+                  berapa pun panjang tulisannya ("Selesai" vs "Dibatalkan"). Di HP: Nominal di atas Status, rata kanan. */}
               <button
                 type="button"
                 onClick={() => onOpen(row)}
-                className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-3 text-left transition hover:bg-slate-50 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto_auto]"
+                className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-3 text-left transition hover:bg-slate-50 sm:grid-cols-[5.5rem_minmax(0,1fr)_8rem_6.5rem] sm:gap-x-4"
               >
                 <span className="font-bold text-brand-600">{queueLabel(row) ?? '—'}</span>
                 <span className="min-w-0">
                   <span className="block truncate font-semibold text-slate-800">{row.customer_name}</span>
                   <span className="block truncate text-xs text-slate-500">{meta(row, packages.get(row.package_id))}</span>
                 </span>
-                <span className="text-right font-bold text-slate-800">{formatRupiah(row.total)}</span>
-                <span className="col-start-3 justify-self-end sm:col-start-auto">
+                <span className="text-right font-bold whitespace-nowrap text-slate-800">{formatRupiah(row.total)}</span>
+                <span className="col-start-3 justify-self-end sm:col-start-auto sm:justify-self-start">
                   <Badge tone={VISIT_STATUS_TONES[row.status]}>{VISIT_STATUS_LABELS[row.status]}</Badge>
                 </span>
               </button>

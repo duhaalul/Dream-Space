@@ -17,7 +17,7 @@ Satu halaman `/antrean` (tanpa tab): kartu paket → banner ruangan → Di Ruang
 |---|---|---|
 | `pages/QueuePage.jsx` | wadah halaman | Admin; Owner lihat |
 | `components/QueueBoard.jsx` | papan per paket + bagian Reservasi + pop-up (Detail, Sudah Datang, Ubah Reservasi) | Admin; Owner lihat |
-| `components/ReservationSection.jsx` | bagian Reservasi: pilihan tanggal, kartu (jam, nama, "Paket · N orang"/"Belum pilih paket", DP/Lunas) | Admin; Owner lihat |
+| `components/ReservationSection.jsx` | bagian Reservasi: pilihan tanggal, kartu (jam, nama, "Paket · N orang"/"Belum pilih paket", **Lunas / Sisa Rp…**), tombol **Terlewat (N)** → daftar reservasi lewat tanggal | Admin; Owner lihat |
 | `components/CheckInModal.jsx` | pop-up **Sudah Datang**: chip data reservasi, **tambahan** (boleh ditambah, tidak dikurangi), isian paket (data lama), sisa bayar, **Masuk Antrean** → pop-up Berhasil | Admin |
 | `components/ReservationEditModal.jsx` | pop-up **Ubah Reservasi**: isian sama dengan form Reservasi (`kasir/components/ReservationFields`), rincian Total · Sudah dibayar · Sisa dibayar saat datang / **Dikembalikan** + "Dikembalikan lewat" (Tunai/Transfer), satu Simpan | Admin |
 | `components/PackageTiles.jsx` | kartu paket (Kosong/Dipanggil/Dipakai/Ditutup) + sisa waktu sesi | Admin; Owner lihat |
@@ -30,7 +30,7 @@ Satu halaman `/antrean` (tanpa tab): kartu paket → banner ruangan → Di Ruang
 | `components/VisitDetailModal.jsx` | Detail ringkas: jadwal & No. WhatsApp (reservasi), paket, tambahan, pembayaran ("Dibayar … · dikembalikan … · sisa …", Lunas dari `payment_status`), jam daftar, alasan batal; Batalkan, Ubah Reservasi, Cetak Nota | Admin; Owner lihat |
 | `components/BoardParts.jsx` | `Section`, `EmptyNote`, `RefreshButton`, `QueueLoading`, `ActionFeedback` | — |
 | `components/PackageFields.jsx` | Paket, Latar, Jumlah Orang sejajar satu baris (Pendaftaran, Reservasi, Sudah Datang); `PACKAGE_GRID` = lajurnya, dipakai baris lain yang ingin lurus | Admin |
-| `useQueueData.js` | data antrean hari ini, `useReservations(date)`, `useDayVisits(date)`; diperbarui otomatis tiap 15 detik | — |
+| `useQueueData.js` | data antrean hari ini, `useReservations(date)`, `useOverdueReservations()` (reservasi terlewat, 1 tahun ke belakang), `useDayVisits(date)`; diperbarui otomatis tiap 15 detik | — |
 | `useVisitActions.js` | jalankan tindakan + pesan sukses/error; memancarkan `QUEUE_CHANGED_EVENT` | — |
 | `useNow.js` | waktu sekarang per detik (untuk timer) | — |
 | `queue.js` | `buildBoard`, `packageQueue`, `queueLabel`/`formatQueueNumber` (`RG-001`, `RG-R001`), `ticketFor`, `visitMeta`, `sessionTimer`, `whatsappNumber` | — |
@@ -67,7 +67,12 @@ Batalkan wajib alasan dan hanya sebelum foto dimulai. Uang yang sudah dibayar **
 
 ## Reservasi, Ubah Reservasi & Sudah Datang
 - Bagian **Reservasi** (paling bawah): **semua paket** pada satu tanggal (bawaan hari ini), urut jam. Pilih tanggal lain untuk melihat reservasi mendatang atau yang belum datang dari hari sebelumnya.
+- Kartu: **Lunas**, atau **Sisa Rp…** (= total − uang bersih yang sudah dibayar, field `paid` dari `GET /visits`) untuk yang belum lunas, termasuk reservasi lunas yang naik paket. Data lama tanpa paket: "DP".
 - Reservasi yang tidak datang **tidak** ditutup otomatis: tetap ada sampai Admin membatalkan atau mengubahnya.
+- **Terlewat (N)** (di samping pilihan tanggal, hanya bila ada): reservasi yang tanggalnya sudah lewat tapi belum datang/dibatalkan.
+  - Diklik → judul "Reservasi Terlewat (N)", semua tampil sekaligus urut jadwal; kotak jam memuat tanggalnya.
+  - Tombol Batalkan & Detail (Ubah Reservasi untuk pindah jadwal), tanpa Sudah Datang.
+  - Diklik lagi atau memilih tanggal → kembali ke tampilan per tanggal.
 - **Ubah Reservasi** (Detail › Ubah Reservasi; hanya sebelum datang): nama, No. WA, paket, latar, jumlah orang, tambahan, tanggal & jam dalam satu pop-up.
   - Pilihan jam dihitung ulang dengan lama pemakaian baru (reservasi itu sendiri tidak dihitung bentrok); jam semula tetap bisa dipilih.
   - Ganti paket → harga paket sekarang; paket sama → harga saat reservasi.

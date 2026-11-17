@@ -6,6 +6,7 @@ Pegangan kerja menu **Pendaftaran** (tab **Di Tempat** dan **Reservasi**) dan **
 - **Di Tempat:** pelanggan di studio memilih paket, latar, jumlah orang, dan tambahan, lalu **membayar lunas** dan langsung masuk antrean. Nota tercetak setelah bayar.
 - **Reservasi:** pesanan lewat WhatsApp dicatat dengan **paket (wajib)**, tanggal & jam (tidak boleh bentrok di paket yang sama), dan **DP atau Lunas** lewat Transfer/QRIS. Pelanggan muncul di Antrean › **Reservasi**, lalu masuk antrean lewat **Sudah Datang**.
 - **Riwayat:** daftar sesi yang sudah berakhir (Selesai & Dibatalkan) pada **satu tanggal** (Admin & Owner bebas memilih tanggal), detail transaksi, dan cetak ulang nota. Uang penjualan dilihat di menu **Laporan** (Admin: hari ini).
+  - Reservasi yang **dibatalkan sebelum datang** tampil pada **tanggal pembatalannya** (bukan tanggal reservasinya), dengan keterangan "Jadwal 25 Nov 14.00". Jadi reservasi untuk tanggal mendatang yang dibatalkan hari ini terlihat di Riwayat hari ini.
 
 ## Penanggung jawab
 **Ihsan**
@@ -47,12 +48,12 @@ Setelah masuk antrean (Di Tempat lunas saat daftar, reservasi setelah Sudah Data
 | `components/AddonPicker.jsx` | tambahan yang diizinkan paket (+/−); `min` = jumlah minimum per tambahan (Sudah Datang) | Admin |
 | `components/PackageSummary.jsx` | chip kapasitas · durasi (· urutan · ruangan bila ada `data`); `Chip` | Admin |
 | `pages/HistoryPage.jsx` | `/riwayat`: pilihan satu Tanggal, 3 kartu (Total Sesi, Selesai, Dibatalkan), daftar | Admin & Owner |
-| `components/HistoryList.jsx` | daftar sesi + pencarian (nomor, nama, paket, no. transaksi) | Admin & Owner |
-| `components/TransactionDetailModal.jsx` | rincian, total, pembayaran ("DP · metode"), **dikembalikan** (refund), kembalian, waktu lunas, alasan batal, Cetak Ulang Nota | Admin & Owner |
+| `components/HistoryList.jsx` | daftar sesi + pencarian (nomor, nama, paket, no. transaksi); kolom Nominal & Status selebar tetap (angka dan badge lurus); reservasi batal sebelum datang: "Paket · Jadwal 25 Nov 14.00" | Admin & Owner |
+| `components/TransactionDetailModal.jsx` | rincian, **Total = harga semua layanan**, pembayaran ("DP · metode"), **dikembalikan** (refund), kembalian (bila > 0), **Uang ditahan (batal)** untuk kunjungan batal, waktu lunas & Cetak Ulang Nota (hanya bila lunas penuh / Selesai), alasan batal | Admin & Owner |
 | `useCatalog.js` | katalog paket + tambahan untuk form (dipakai juga pop-up Sudah Datang & Ubah Reservasi) | — |
 | `useReservationSlots.js` | `useReservationSlots` (pilihan jam dari backend) + `useReservationTime` (opsi Jam, placeholder, "(terisi)"; saat ubah, jam semula tetap bisa dipilih) | — |
 | `reservation.js` | `normalizePhone`, `validPhone`, `liveReservationErrors`, `validateReservation`, `reservationPayload` (form Reservasi & Ubah Reservasi) | — |
-| `cashier.js` | `PAYMENT_METHODS`, `RESERVATION_METHODS`, `bookingMinutes`, `billPreview`, `editBillPreview` (paket sama → harga saat reservasi), `billFromDetail`, `cashError`, `paymentPayload`, `successInfo`, `activeItems`, `itemLabel`, `totalChange`, `methodLabel` | — |
+| `cashier.js` | `PAYMENT_METHODS`, `RESERVATION_METHODS`, `bookingMinutes`, `billPreview`, `editBillPreview` (paket sama → harga saat reservasi), `billFromDetail`, `itemsTotal`, `fullyPaid` (lunas penuh, sama dengan syarat nota backend), `cashError`, `paymentPayload`, `successInfo`, `activeItems`, `itemLabel`, `totalChange`, `methodLabel` | — |
 
 Dipakai ulang dari `antrean`: `PackageFields`, `useDayVisits`, `packageQueue`, `queueLabel`, `interpretSaveError`.
 
@@ -114,6 +115,8 @@ Body `updateReservation` (seluruh isian akhir; `refund` dikirim bila sudah ada u
 - Nota tersedia sejak lunas: dicetak dari pop-up, lalu bisa dicetak ulang dari Antrean (Detail) atau Riwayat.
 - Pembatalan tidak mengembalikan uang (DP maupun reservasi lunas). Uang hanya dikembalikan saat **Ubah Reservasi** membuat total lebih kecil dari yang sudah dibayar.
 - "Lunas" dibaca dari `transaction.payment_status`, bukan `paid_off_at` (tetap terisi walau paket dinaikkan setelah lunas).
+- Kunjungan **batal**: backend mengganti `transaction.total` menjadi uang yang ditahan. Di Riwayat, Total tetap harga layanan (dari rincian), uang yang ditahan tampil di baris "Uang ditahan (batal)".
+- **Lunas penuh** (`fullyPaid`) = `paid_off_at` terisi dan uang bersih ≥ harga semua layanan. Dipakai untuk baris "Lunas" dan Cetak Ulang Nota di Riwayat, sama dengan syarat nota di backend.
 
 ## Error yang ditangani khusus
 | Kode | Tindakan di tampilan |

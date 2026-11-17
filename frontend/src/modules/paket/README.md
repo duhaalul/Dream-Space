@@ -52,7 +52,8 @@ Contoh body paket:
 ## Aturan wajib
 - **Durasi Sesi** (`duration_minutes`, wajib di form, 1–600 menit) dipakai timer di Antrean saat Mulai Foto. Tambahan berisi **Nama** (huruf pertama otomatis kapital), **Harga**, dan **Per [jumlah] [satuan]** (satuan diketik bebas). Disimpan sebagai `unit` = "5 menit" (atau cukup "lembar" bila jumlah 1). Bila satuannya `menit`/`mnt` (atau `jam` ×60), `extra_minutes` otomatis terisi sehingga menambah timer sesi; satuan lain → `null`.
 - Tambah/ubah paket lewat **pop-up** dengan **satu tombol Simpan**. Semua bagian dikirim sekaligus (`createPackageSetup`/`updatePackageSetup`), jadi tidak ada paket yang tersimpan setengah. Hanya latar baru dan latar lama yang berubah yang dikirim.
-- Paket dan latar **tidak dihapus**, cukup dinonaktifkan (`is_active: false`); paket nonaktif tidak muncul di pendaftaran baru.
+- Paket dan latar **tidak dihapus**, cukup dinonaktifkan (`is_active: false`); paket nonaktif tidak muncul di pendaftaran baru maupun papan Antrean.
+- Paket yang **masih dipakai** (ada yang menunggu/dipanggil/sedang foto/dilewati, atau reservasi yang belum datang) **tidak bisa dinonaktifkan**. Tombol Nonaktifkan memunculkan pop-up "… belum bisa dinonaktifkan" berisi jumlahnya dan petunjuk (backend: `PACKAGE_IN_USE`).
 - Tambahan layanan **tanpa** aktif/nonaktif: cukup **Ubah** dan **Hapus** (dengan konfirmasi). Tambahan yang **masih tercentang di paket** tidak bisa dihapus: muncul peringatan "… belum bisa dihapus" berisi nama paketnya (backend: `ADDON_IN_USE`). Tambahan yang sudah pernah dipakai transaksi diarsipkan oleh backend (disembunyikan, riwayat tetap utuh).
 - Cara hitung harga (`price_type`):
   - `PER_SESI`: harga tetap per sesi;
@@ -69,6 +70,7 @@ Contoh body paket:
 | Kode | Tindakan di tampilan |
 |---|---|
 | `DUPLICATE_VALUE` (409) | Nama/kode paket atau nama latar sudah dipakai; pesan di pop-up, isian tidak hilang |
+| `PACKAGE_IN_USE` (409) | Nonaktifkan paket yang masih dipakai; pop-up "… belum bisa dinonaktifkan" + petunjuk ke Antrean / Antrean › Reservasi |
 | `VALIDATION_ERROR` (422) | `error.details[].path` (`package.price`, `backgrounds.1.name`); tampilkan di kolom/baris latarnya |
 | `REASON_REQUIRED` | Alasan menutup ruangan masih kosong |
 | `ROOM_BUSY` | Ruangan masih dipakai; belum bisa ditutup |
